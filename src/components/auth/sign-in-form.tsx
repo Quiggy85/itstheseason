@@ -1,13 +1,16 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useState, FormEvent } from "react";
 
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
 
-export function SignInForm() {
+interface SignInFormProps {
+  redirectTo?: string;
+}
+
+export function SignInForm({ redirectTo }: SignInFormProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -31,8 +34,8 @@ export function SignInForm() {
         return;
       }
 
-      const redirectTo = searchParams?.get("redirect") ?? "/account";
-      router.push(redirectTo);
+      const target = redirectTo ?? "/account";
+      router.push(target);
       router.refresh();
     } catch (err) {
       console.error("Failed to sign in", err);

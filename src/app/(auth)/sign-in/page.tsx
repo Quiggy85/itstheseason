@@ -2,7 +2,13 @@ import Link from "next/link";
 
 import { SignInForm } from "@/components/auth/sign-in-form";
 
-export default function SignInPage() {
+type SignInPageProps = {
+  searchParams?: {
+    redirect?: string;
+  };
+};
+
+export default function SignInPage({ searchParams }: SignInPageProps) {
   return (
     <div className="space-y-6">
       <div className="space-y-2 text-center">
@@ -11,7 +17,7 @@ export default function SignInPage() {
           Sign in to manage your orders, addresses, and payment details.
         </p>
       </div>
-      <SignInForm />
+      <SignInForm redirectTo={searchParams?.redirect} />
       <p className="text-center text-sm text-zinc-600">
         New here?{" "}
         <Link className="font-medium text-blue-600 hover:text-blue-700" href="/sign-up">
