@@ -6,6 +6,7 @@ export interface CatalogProduct {
   inventory?: number;
   estimatedDeliveryMinDays?: number;
   estimatedDeliveryMaxDays?: number;
+  shippingPolicy?: string;
   returnsPolicy?: string;
   images: string[];
   tags?: string[];

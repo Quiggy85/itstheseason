@@ -12,6 +12,7 @@ type CJSearchResponse = {
     currency: string;
     inventory?: number;
     shipping_time?: string;
+    shipping_policy?: string;
     return_policy?: string;
     product_images?: string[];
     tags?: string[];
@@ -41,12 +42,27 @@ function mapProduct(raw: CJSearchResponse["data"][number]): CJProduct {
     inventory: raw.inventory,
     estimatedDeliveryMinDays: estimate.min,
     estimatedDeliveryMaxDays: estimate.max,
+    shippingPolicy: raw.shipping_policy,
     returnsPolicy: raw.return_policy,
     images: raw.product_images ?? [],
     tags: raw.tags,
     description: raw.description,
     raw,
   };
+}
+
+function filterForUkShipping(products: CJProduct[], requireUkShipping: boolean): CJProduct[] {
+  if (!requireUkShipping) return products;
+  // Placeholder filtering: retain products that either explicitly mention UK delivery
+  // in their tags or shipping policy. This should be refined once CJ API shipping
+  // metadata is confirmed.
+  return products.filter((product) => {
+    const tagsContainUk = product.tags?.some((tag) => /uk|united kingdom/i.test(tag)) ?? false;
+    const policyMentionsUk = product.shippingPolicy
+      ? /uk|united kingdom/i.test(product.shippingPolicy)
+      : false;
+    return tagsContainUk || policyMentionsUk;
+  });
 }
 
 function buildCacheKey(params: CJSearchParams) {
@@ -70,7 +86,8 @@ export async function searchCJProducts(params: CJSearchParams): Promise<CJProduc
     return response;
   });
 
-  const products = result.data.map(mapProduct);
-  cache.set(cacheKey, products, 2 * 60 * 1000);
-  return products;
+  const mappedProducts = result.data.map(mapProduct);
+  const filteredProducts = filterForUkShipping(mappedProducts, params.requireUkShipping ?? true);
+  cache.set(cacheKey, filteredProducts, 2 * 60 * 1000);
+  return filteredProducts;
 }

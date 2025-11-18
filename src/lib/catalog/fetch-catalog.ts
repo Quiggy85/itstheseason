@@ -1,5 +1,6 @@
 import { searchCJProducts } from "@/lib/cj/service";
 import { getSupabaseServerClient } from "@/lib/supabase/server-client";
+import { fetchCachedCatalog, persistProductsForEvent, mapCJProductToCatalogProduct } from "@/lib/catalog/cache";
 
 import type { CatalogResponse } from "./types";
 
@@ -54,6 +55,20 @@ export async function fetchCatalogBySlug(
     };
   }
 
+  const cached = await fetchCachedCatalog(supabase, event.id, limit, offset);
+  if (cached.products.length && cached.fresh) {
+    return {
+      data: {
+        event,
+        products: cached.products,
+        pagination: {
+          limit,
+          offset,
+        },
+      },
+    };
+  }
+
   try {
     const products = await searchCJProducts({
       keywords,
@@ -62,10 +77,14 @@ export async function fetchCatalogBySlug(
       requireUkShipping,
     });
 
+    await persistProductsForEvent(event.id, products);
+
+    const mappedProducts = products.map(mapCJProductToCatalogProduct);
+
     return {
       data: {
         event,
-        products,
+        products: mappedProducts,
         pagination: {
           limit,
           offset,
@@ -74,6 +93,20 @@ export async function fetchCatalogBySlug(
     };
   } catch (error) {
     console.error("Failed to fetch CJ products", error);
+
+    if (cached.products.length) {
+      return {
+        data: {
+          event,
+          products: cached.products,
+          pagination: {
+            limit,
+            offset,
+          },
+        },
+      };
+    }
+
     return { error: { status: 502, message: "Unable to load products." } };
   }
 }
