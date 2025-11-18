@@ -3,14 +3,12 @@ import { NextResponse, type NextRequest } from "next/server";
 import { searchCJProducts } from "@/lib/cj/service";
 import { getSupabaseServerClient } from "@/lib/supabase/server-client";
 
-type RouteParams = {
-  params: {
-    slug: string;
-  };
+type RouteContext = {
+  params: Promise<{ slug: string }>;
 };
 
-export async function GET(request: NextRequest, { params }: RouteParams) {
-  const { slug } = params;
+export async function GET(request: NextRequest, context: RouteContext) {
+  const { slug } = await context.params;
   if (!slug) {
     return NextResponse.json({ error: "Missing seasonal event." }, { status: 400 });
   }
