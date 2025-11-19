@@ -20,9 +20,13 @@ export function ProductCard({ product }: ProductCardProps) {
     product.estimatedDeliveryMinDays !== undefined &&
     product.estimatedDeliveryMaxDays !== undefined;
 
+  const productLink = product.eventSlug
+    ? `/products/${product.id}?event=${product.eventSlug}`
+    : `/products/${product.id}`;
+
   return (
     <Link
-      href={`/products/${product.id}`}
+      href={productLink}
       className="group relative block h-full focus:outline-none focus-visible:ring-4 focus-visible:ring-blue-300/60"
     >
       <article className="relative flex h-full flex-col overflow-hidden rounded-4xl border border-transparent bg-white/95 shadow-[0_18px_50px_-25px_rgba(30,64,175,0.45)] transition-all duration-200 group-hover:-translate-y-1 group-hover:shadow-[0_22px_60px_-30px_rgba(30,64,175,0.55)]">
