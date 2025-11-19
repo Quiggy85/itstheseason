@@ -46,6 +46,8 @@ export default async function ProductPage({ params, searchParams }: ProductPageP
     ? searchParams?.event[0]
     : searchParams?.event;
 
+  console.log("[ProductPage] request", { id, eventSlugParam });
+
   const { data, error } = await fetchProductById(id);
 
   let product: CatalogProduct | undefined;
@@ -60,6 +62,12 @@ export default async function ProductPage({ params, searchParams }: ProductPageP
       requireUkShipping: true,
     });
 
+    console.log("[ProductPage] fallback fetch", {
+      fallbackError,
+      productCount: fallbackData?.products.length,
+      firstProductId: fallbackData?.products[0]?.id,
+    });
+
     if (fallbackError?.status === 404) {
       notFound();
     }
@@ -67,6 +75,7 @@ export default async function ProductPage({ params, searchParams }: ProductPageP
     if (fallbackData) {
       product = fallbackData.products.find((candidate) => candidate.id === id);
       event = fallbackData.event;
+      console.log("[ProductPage] fallback lookup result", { matched: Boolean(product) });
     }
   }
 

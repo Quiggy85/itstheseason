@@ -26,6 +26,7 @@ export type SelectedProductRow = Pick<
   | "media"
   | "product_metadata"
   | "tags"
+  | "media"
   | "last_synced_at"
 >;
 
