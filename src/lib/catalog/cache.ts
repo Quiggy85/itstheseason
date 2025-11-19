@@ -11,8 +11,9 @@ const CACHE_TTL_MINUTES = 60;
 type ProductRow = Database["public"]["Tables"]["products"]["Row"];
 type ProductInsert = Database["public"]["Tables"]["products"]["Insert"];
 
-type SelectedProductRow = Pick<
+export type SelectedProductRow = Pick<
   ProductRow,
+  | "event_id"
   | "cj_product_id"
   | "title"
   | "price"
@@ -40,11 +41,12 @@ function coercePrice(value: number | string | null): number {
   return 0;
 }
 
-function rowToCatalogProduct(row: SelectedProductRow): CatalogProduct {
+export function rowToCatalogProduct(row: SelectedProductRow): CatalogProduct {
   const media = (row.media as { images?: string[] } | null) ?? null;
   const metadata = (row.product_metadata as Record<string, unknown> | null) ?? null;
 
   return {
+    eventId: row.event_id ?? undefined,
     id: row.cj_product_id,
     title: row.title,
     price: coercePrice(row.price),
@@ -60,12 +62,13 @@ function rowToCatalogProduct(row: SelectedProductRow): CatalogProduct {
   };
 }
 
-export function mapCJProductToCatalogProduct(product: CJProduct): CatalogProduct {
+export function mapCJProductToCatalogProduct(product: CJProduct, eventId?: string): CatalogProduct {
   return {
     id: product.id,
     title: product.title,
     price: product.price,
     currency: product.currency,
+    eventId,
     inventory: product.inventory,
     estimatedDeliveryMinDays: product.estimatedDeliveryMinDays,
     estimatedDeliveryMaxDays: product.estimatedDeliveryMaxDays,
@@ -87,7 +90,7 @@ export async function fetchCachedCatalog(
   const { data, error } = await supabase
     .from("products")
     .select(
-      "cj_product_id, title, price, currency_code, inventory_quantity, estimated_delivery_min_days, estimated_delivery_max_days, shipping_policy, returns_policy, media, product_metadata, tags, last_synced_at",
+      "event_id, cj_product_id, title, price, currency_code, inventory_quantity, estimated_delivery_min_days, estimated_delivery_max_days, shipping_policy, returns_policy, media, product_metadata, tags, last_synced_at",
     )
     .eq("event_id", eventId)
     .order("last_synced_at", { ascending: false })

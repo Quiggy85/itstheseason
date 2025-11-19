@@ -81,7 +81,9 @@ export async function fetchCatalogBySlug(
 
     await persistProductsForEvent(event.id, products);
 
-    const mappedProducts = products.map(mapCJProductToCatalogProduct);
+    const mappedProducts = products.map((product) =>
+      mapCJProductToCatalogProduct(product, event.id),
+    );
     const hasMore = products.length === limit;
     const total = cached.total && cached.total > offset
       ? Math.max(cached.total, offset + mappedProducts.length)

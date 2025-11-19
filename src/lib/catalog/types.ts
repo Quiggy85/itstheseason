@@ -3,6 +3,7 @@ export interface CatalogProduct {
   title: string;
   price: number;
   currency: string;
+  eventId?: string;
   inventory?: number;
   estimatedDeliveryMinDays?: number;
   estimatedDeliveryMaxDays?: number;
