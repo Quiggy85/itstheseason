@@ -18,7 +18,8 @@ const productSelection =
 
 export async function fetchProductById(productId: string): Promise<FetchProductResult> {
   if (!productId) {
-    return { error: { status: 400, message: "Missing product identifier." } };
+    console.warn("fetchProductById called without a productId");
+    return { error: { status: 404, message: "Product not found." } };
   }
 
   const supabase = await getSupabaseServerClient();
