@@ -64,6 +64,8 @@ export async function fetchCatalogBySlug(
         pagination: {
           limit,
           offset,
+          total: cached.total,
+          hasMore: offset + limit < cached.total,
         },
       },
     };
@@ -80,6 +82,12 @@ export async function fetchCatalogBySlug(
     await persistProductsForEvent(event.id, products);
 
     const mappedProducts = products.map(mapCJProductToCatalogProduct);
+    const hasMore = products.length === limit;
+    const total = cached.total && cached.total > offset
+      ? Math.max(cached.total, offset + mappedProducts.length)
+      : hasMore
+        ? undefined
+        : offset + mappedProducts.length;
 
     return {
       data: {
@@ -88,6 +96,8 @@ export async function fetchCatalogBySlug(
         pagination: {
           limit,
           offset,
+          total,
+          hasMore,
         },
       },
     };
@@ -102,6 +112,8 @@ export async function fetchCatalogBySlug(
           pagination: {
             limit,
             offset,
+            total: cached.total,
+            hasMore: offset + limit < cached.total,
           },
         },
       };

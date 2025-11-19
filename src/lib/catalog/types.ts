@@ -28,5 +28,7 @@ export interface CatalogResponse {
   pagination: {
     limit: number;
     offset: number;
+    total?: number;
+    hasMore?: boolean;
   };
 }
