@@ -11,8 +11,7 @@ const serverEnvSchema = z.object({
   STRIPE_SECRET_KEY: z.string().min(1),
   STRIPE_WEBHOOK_SECRET: z.string().min(1),
   CJ_API_BASE_URL: z.string().url(),
-  CJ_API_ACCESS_KEY: z.string().min(1),
-  CJ_API_SECRET_KEY: z.string().min(1),
+  CJ_API_ACCESS_TOKEN: z.string().min(1),
 });
 
 const parsed = serverEnvSchema.safeParse({
@@ -25,8 +24,7 @@ const parsed = serverEnvSchema.safeParse({
   STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
   STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
   CJ_API_BASE_URL: process.env.CJ_API_BASE_URL,
-  CJ_API_ACCESS_KEY: process.env.CJ_API_ACCESS_KEY,
-  CJ_API_SECRET_KEY: process.env.CJ_API_SECRET_KEY,
+  CJ_API_ACCESS_TOKEN: process.env.CJ_API_ACCESS_TOKEN,
 });
 
 if (!parsed.success) {

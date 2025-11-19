@@ -5,49 +5,90 @@ import { getRateLimitedQueue } from "@/lib/cj/rate-limiter";
 import type { CJProduct, CJSearchParams } from "./types";
 
 type CJSearchResponse = {
-  data: Array<{
-    product_id: string;
-    product_title: string;
-    sell_price: number;
-    currency: string;
-    inventory?: number;
-    shipping_time?: string;
-    shipping_policy?: string;
-    return_policy?: string;
-    product_images?: string[];
-    tags?: string[];
-    description?: string;
-  }>;
+  data?: {
+    pageSize?: number;
+    pageNumber?: number;
+    totalRecords?: number;
+    totalPages?: number;
+    content?: CJProductListGroup[];
+  };
+};
+
+type CJProductListGroup = {
+  productList?: CJProductListItem[];
+  storeList?: CJStoreInfo[];
+};
+
+type CJProductListItem = {
+  id: string;
+  nameEn?: string;
+  productSku?: string;
+  bigImage?: string;
+  sellPrice?: number | string;
+  nowPrice?: number | string;
+  currency?: string;
+  description?: string;
+  deliveryCycle?: string;
+  warehouseInventoryNum?: number;
+  totalVerifiedInventory?: number;
+  totalUnVerifiedInventory?: number;
+  listedNum?: number;
+  oneCategoryName?: string;
+  twoCategoryName?: string;
+  threeCategoryName?: string;
+};
+
+type CJStoreInfo = {
+  warehouseId?: string;
+  warehouseName?: string;
+  countryCode?: string;
 };
 
 const cache = getMemoryCache();
 const queue = getRateLimitedQueue();
 
-function parseShippingEstimate(shippingTime?: string) {
-  if (!shippingTime) return { min: undefined, max: undefined };
+function coerceNumber(value?: number | string | null): number | undefined {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const parsed = Number.parseFloat(String(value));
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
 
-  const match = shippingTime.match(/(\d+)-(\d+)/);
+function parseDeliveryEstimate(deliveryCycle?: string) {
+  if (!deliveryCycle) return { min: undefined, max: undefined };
+
+  const match = deliveryCycle.match(/(\d+)\s*-\s*(\d+)/);
   if (!match) return { min: undefined, max: undefined };
 
   return { min: Number.parseInt(match[1], 10), max: Number.parseInt(match[2], 10) };
 }
 
-function mapProduct(raw: CJSearchResponse["data"][number]): CJProduct {
-  const estimate = parseShippingEstimate(raw.shipping_time);
+function mapProduct(raw: CJProductListItem, stores: CJStoreInfo[] = []): CJProduct {
+  const estimate = parseDeliveryEstimate(raw.deliveryCycle);
+  const price = coerceNumber(raw.nowPrice) ?? coerceNumber(raw.sellPrice) ?? 0;
+  const inventory =
+    raw.totalVerifiedInventory ?? raw.warehouseInventoryNum ?? raw.totalUnVerifiedInventory;
+  const tags = [raw.oneCategoryName, raw.twoCategoryName, raw.threeCategoryName].filter(
+    (value): value is string => Boolean(value && value.length),
+  );
+  const storeCountries = stores
+    .map((store) => store.countryCode?.toUpperCase())
+    .filter((code): code is string => Boolean(code));
+
   return {
-    id: raw.product_id,
-    title: raw.product_title,
-    price: raw.sell_price,
-    currency: raw.currency,
-    inventory: raw.inventory,
+    id: raw.id,
+    title: raw.nameEn ?? raw.productSku ?? "CJ Product",
+    price,
+    currency: raw.currency ?? "USD",
+    inventory: inventory ?? undefined,
     estimatedDeliveryMinDays: estimate.min,
     estimatedDeliveryMaxDays: estimate.max,
-    shippingPolicy: raw.shipping_policy,
-    returnsPolicy: raw.return_policy,
-    images: raw.product_images ?? [],
-    tags: raw.tags,
+    shippingPolicy: undefined,
+    returnsPolicy: undefined,
+    images: raw.bigImage ? [raw.bigImage] : [],
+    tags: tags.length ? tags : undefined,
     description: raw.description,
-    raw,
+    raw: { product: raw, storeCountries },
   };
 }
 
@@ -61,7 +102,11 @@ function filterForUkShipping(products: CJProduct[], requireUkShipping: boolean):
     const policyMentionsUk = product.shippingPolicy
       ? /uk|united kingdom/i.test(product.shippingPolicy)
       : false;
-    return tagsContainUk || policyMentionsUk;
+    const rawStoreCountries = Array.isArray((product.raw as { storeCountries?: string[] })?.storeCountries)
+      ? ((product.raw as { storeCountries?: string[] }).storeCountries ?? [])
+      : [];
+    const storeSupportsUk = rawStoreCountries.some((code) => code === "GB" || code === "UK");
+    return tagsContainUk || policyMentionsUk || storeSupportsUk;
   });
 }
 
@@ -75,10 +120,24 @@ export async function searchCJProducts(params: CJSearchParams): Promise<CJProduc
   const cached = cache.get<CJProduct[]>(cacheKey);
   if (cached) return cached;
 
+  const { keywords, requireUkShipping = true } = params;
+  const requestedLimit = params.limit && params.limit > 0 ? params.limit : 20;
+  const size = Math.min(Math.max(requestedLimit, 1), 100);
+  const offset = params.offset ?? 0;
+  const page = Math.floor(offset / size) + 1;
+  const keywordQuery = keywords.join(" ").trim();
+
   const result = await queue.enqueue(async () => {
-    // TODO: adjust endpoint & payload per CJ API docs.
+    const searchParams = new URLSearchParams({
+      page: page.toString(),
+      size: size.toString(),
+    });
+    if (keywordQuery) {
+      searchParams.set("keyWord", keywordQuery);
+    }
+
     const response = await cjFetch<CJSearchResponse>(
-      `/products/search?keywords=${encodeURIComponent(params.keywords.join(","))}`,
+      `/v1/product/listV2?${searchParams.toString()}`,
       {
         method: "GET",
       },
@@ -86,8 +145,14 @@ export async function searchCJProducts(params: CJSearchParams): Promise<CJProduc
     return response;
   });
 
-  const mappedProducts = result.data.map(mapProduct);
-  const filteredProducts = filterForUkShipping(mappedProducts, params.requireUkShipping ?? true);
+  const groups = result.data?.content ?? [];
+  const mappedProducts = groups.flatMap((group) => {
+    const stores = group.storeList ?? [];
+    return (group.productList ?? []).map((product) => mapProduct(product, stores));
+  });
+
+  const limitedProducts = mappedProducts.slice(0, size);
+  const filteredProducts = filterForUkShipping(limitedProducts, requireUkShipping);
   cache.set(cacheKey, filteredProducts, 2 * 60 * 1000);
   return filteredProducts;
 }

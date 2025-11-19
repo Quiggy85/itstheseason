@@ -1,36 +1,20 @@
-import crypto from "node:crypto";
-
 import { serverEnv } from "@/lib/env.server";
 
-import type { CJApiConfig } from "./types";
-
-function getConfig(): CJApiConfig {
+function getConfig() {
   return {
     baseUrl: serverEnv.CJ_API_BASE_URL,
-    accessKey: serverEnv.CJ_API_ACCESS_KEY,
-    secretKey: serverEnv.CJ_API_SECRET_KEY,
-  };
-}
-
-function signRequest(path: string, timestamp: number, secretKey: string) {
-  return crypto
-    .createHmac("sha256", secretKey)
-    .update(`${path}${timestamp}`)
-    .digest("hex");
+    accessToken: serverEnv.CJ_API_ACCESS_TOKEN,
+  } as const;
 }
 
 export async function cjFetch<TResponse>(path: string, init?: RequestInit): Promise<TResponse> {
-  const { baseUrl, accessKey, secretKey } = getConfig();
-  const timestamp = Date.now();
-  const signature = signRequest(path, timestamp, secretKey);
+  const { baseUrl, accessToken } = getConfig();
 
   const response = await fetch(`${baseUrl}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
-      "CJ-API-ACCESS-KEY": accessKey,
-      "CJ-API-TIMESTAMP": timestamp.toString(),
-      "CJ-API-SIGNATURE": signature,
+      "CJ-Access-Token": accessToken,
       ...(init?.headers ?? {}),
     },
     signal: init?.signal,

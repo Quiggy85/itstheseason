@@ -26,8 +26,7 @@ STRIPE_WEBHOOK_SECRET="whsec_..."
 
 # --- CJ Dropshipping ---
 CJ_API_BASE_URL="https://api.mycjdomain.com"
-CJ_API_ACCESS_KEY="..."
-CJ_API_SECRET_KEY="..."
+CJ_API_ACCESS_TOKEN="..."
 
 # --- App configuration ---
 NEXT_PUBLIC_APP_URL="http://localhost:3000"

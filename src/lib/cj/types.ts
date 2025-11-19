@@ -20,9 +20,3 @@ export interface CJSearchParams {
   offset?: number;
   requireUkShipping?: boolean;
 }
-
-export interface CJApiConfig {
-  baseUrl: string;
-  accessKey: string;
-  secretKey: string;
-}
