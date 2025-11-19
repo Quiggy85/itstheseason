@@ -15,6 +15,10 @@ interface ProductCardProps {
 }
 
 export function ProductCard({ product }: ProductCardProps) {
+  if (!product.id) {
+    return null;
+  }
+
   const coverImage = product.images?.[0];
   const hasDeliveryWindow =
     product.estimatedDeliveryMinDays !== undefined &&
