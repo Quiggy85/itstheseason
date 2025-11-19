@@ -62,13 +62,17 @@ export function rowToCatalogProduct(row: SelectedProductRow): CatalogProduct {
   };
 }
 
-export function mapCJProductToCatalogProduct(product: CJProduct, eventId?: string): CatalogProduct {
+export function mapCJProductToCatalogProduct(
+  product: CJProduct,
+  context: { eventId?: string; eventSlug?: string } = {},
+): CatalogProduct {
   return {
     id: product.id,
     title: product.title,
     price: product.price,
     currency: product.currency,
-    eventId,
+    eventId: context.eventId,
+    eventSlug: context.eventSlug,
     inventory: product.inventory,
     estimatedDeliveryMinDays: product.estimatedDeliveryMinDays,
     estimatedDeliveryMaxDays: product.estimatedDeliveryMaxDays,

@@ -4,6 +4,7 @@ export interface CatalogProduct {
   price: number;
   currency: string;
   eventId?: string;
+  eventSlug?: string;
   inventory?: number;
   estimatedDeliveryMinDays?: number;
   estimatedDeliveryMaxDays?: number;

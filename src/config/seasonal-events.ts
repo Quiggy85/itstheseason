@@ -5,6 +5,7 @@ export type SeasonalEventConfig = {
   startDay: number;
   endMonth: number;
   endDay: number;
+  keywords: string[];
   hero: {
     headline: string;
     subheadline: string;
@@ -21,6 +22,7 @@ export const SEASONAL_EVENTS: SeasonalEventConfig[] = [
     startDay: 1,
     endMonth: 1,
     endDay: 31,
+    keywords: ["january sale", "new year deals"],
     hero: {
       headline: "Start the year with standout savings",
       subheadline: "Fresh finds for your resolutions and home refreshes.",
@@ -35,6 +37,7 @@ export const SEASONAL_EVENTS: SeasonalEventConfig[] = [
     startDay: 1,
     endMonth: 2,
     endDay: 15,
+    keywords: ["valentine gifts", "romantic"],
     hero: {
       headline: "Love in every parcel",
       subheadline: "Gifts that say it all, delivered across the UK.",
@@ -49,6 +52,7 @@ export const SEASONAL_EVENTS: SeasonalEventConfig[] = [
     startDay: 20,
     endMonth: 3,
     endDay: 31,
+    keywords: ["mother's day", "mum gifts"],
     hero: {
       headline: "Thank mum with something thoughtful",
       subheadline: "Curated keepsakes and pampering treats she'll love.",
@@ -63,6 +67,7 @@ export const SEASONAL_EVENTS: SeasonalEventConfig[] = [
     startDay: 1,
     endMonth: 4,
     endDay: 15,
+    keywords: ["easter gifts", "spring décor"],
     hero: {
       headline: "Hop into spring",
       subheadline: "Bright décor and sweet surprises for the whole family.",
@@ -77,6 +82,7 @@ export const SEASONAL_EVENTS: SeasonalEventConfig[] = [
     startDay: 20,
     endMonth: 6,
     endDay: 30,
+    keywords: ["father's day", "dad gifts"],
     hero: {
       headline: "Top picks for top dads",
       subheadline: "From gadgets to grooming, discover gifts that impress.",
@@ -91,6 +97,7 @@ export const SEASONAL_EVENTS: SeasonalEventConfig[] = [
     startDay: 1,
     endMonth: 10,
     endDay: 31,
+    keywords: ["halloween costumes", "spooky décor"],
     hero: {
       headline: "Spooktacular season essentials",
       subheadline: "Costumes, décor, and treats ready for fright night.",
@@ -105,6 +112,7 @@ export const SEASONAL_EVENTS: SeasonalEventConfig[] = [
     startDay: 22,
     endMonth: 11,
     endDay: 30,
+    keywords: ["black friday", "flash deals"],
     hero: {
       headline: "Biggest deals of the season",
       subheadline: "Limited-time offers on must-have tech and home upgrades.",
@@ -119,6 +127,7 @@ export const SEASONAL_EVENTS: SeasonalEventConfig[] = [
     startDay: 1,
     endMonth: 12,
     endDay: 5,
+    keywords: ["cyber monday", "online deals"],
     hero: {
       headline: "Online exclusives continue",
       subheadline: "Snap up smart savings before they're gone.",
@@ -133,6 +142,7 @@ export const SEASONAL_EVENTS: SeasonalEventConfig[] = [
     startDay: 15,
     endMonth: 12,
     endDay: 26,
+    keywords: ["christmas gifts", "festive décor"],
     hero: {
       headline: "Wrap up your wish list",
       subheadline: "Festive décor, gifting, and stocking fillers delivered",
