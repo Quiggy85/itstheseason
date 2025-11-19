@@ -3,7 +3,8 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { fetchProductById } from "@/lib/catalog/fetch-product";
-import type { CatalogProduct } from "@/lib/catalog/types";
+import { fetchCatalogBySlug } from "@/lib/catalog/fetch-catalog";
+import type { CatalogProduct, CatalogEvent } from "@/lib/catalog/types";
 
 function formatPrice(value: number, currency: string) {
   return new Intl.NumberFormat("en-GB", {
@@ -34,21 +35,48 @@ type ProductPageProps = {
   params: {
     id: string;
   };
+  searchParams?: {
+    event?: string | string[];
+  };
 };
 
-export default async function ProductPage({ params }: ProductPageProps) {
+export default async function ProductPage({ params, searchParams }: ProductPageProps) {
   const { id } = params;
+  const eventSlugParam = Array.isArray(searchParams?.event)
+    ? searchParams?.event[0]
+    : searchParams?.event;
+
   const { data, error } = await fetchProductById(id);
 
-  if (error?.status === 404) {
-    notFound();
+  let product: CatalogProduct | undefined;
+  let event: CatalogEvent | null | undefined = null;
+
+  if (data?.product) {
+    product = data.product;
+    event = data.event;
+  } else if (error?.status === 404 && eventSlugParam) {
+    const { data: fallbackData, error: fallbackError } = await fetchCatalogBySlug(eventSlugParam, {
+      limit: 100,
+      requireUkShipping: true,
+    });
+
+    if (fallbackError?.status === 404) {
+      notFound();
+    }
+
+    if (fallbackData) {
+      product = fallbackData.products.find((candidate) => candidate.id === id);
+      event = fallbackData.event;
+    }
   }
 
-  if (!data?.product) {
+  if (!product) {
+    if (error?.status === 404) {
+      notFound();
+    }
     throw new Error(error?.message ?? "Unable to load product");
   }
 
-  const { product, event } = data;
   const gallery = buildGalleryImages(product);
 
   return (
