@@ -97,7 +97,7 @@ function filterForUkShipping(products: CJProduct[], requireUkShipping: boolean):
   // Placeholder filtering: retain products that either explicitly mention UK delivery
   // in their tags or shipping policy. This should be refined once CJ API shipping
   // metadata is confirmed.
-  return products.filter((product) => {
+  const filtered = products.filter((product) => {
     const tagsContainUk = product.tags?.some((tag) => /uk|united kingdom/i.test(tag)) ?? false;
     const policyMentionsUk = product.shippingPolicy
       ? /uk|united kingdom/i.test(product.shippingPolicy)
@@ -108,6 +108,13 @@ function filterForUkShipping(products: CJProduct[], requireUkShipping: boolean):
     const storeSupportsUk = rawStoreCountries.some((code) => code === "GB" || code === "UK");
     return tagsContainUk || policyMentionsUk || storeSupportsUk;
   });
+
+  if (filtered.length) return filtered;
+
+  // If none of the heuristics matched, fall back to the full set so we don't hide
+  // potentially eligible products. This can be tightened once CJ exposes explicit
+  // destination metadata.
+  return products;
 }
 
 function buildCacheKey(params: CJSearchParams) {
