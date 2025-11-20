@@ -31,25 +31,32 @@ function buildGalleryImages(product: CatalogProduct) {
   }));
 }
 
+type MaybePromise<T> = T | Promise<T>;
+
 type ProductPageProps = {
-  params: {
-    id: string;
-  };
-  searchParams?: {
+  params: MaybePromise<{
+    id: string | string[];
+  }>;
+  searchParams?: MaybePromise<{
     event?: string | string[];
-  };
+  }>;
 };
 
 export default async function ProductPage({ params, searchParams }: ProductPageProps) {
-  const rawId = Array.isArray(params?.id) ? params?.id[0] : params?.id ?? "";
+  const resolvedParams = await params;
+  const resolvedSearchParams = await searchParams;
+
+  const rawId = Array.isArray(resolvedParams?.id)
+    ? resolvedParams?.id[0]
+    : resolvedParams?.id ?? "";
   const id = decodeURIComponent(rawId).split("?")[0]?.trim();
 
-  const eventSlugParam = Array.isArray(searchParams?.event)
-    ? searchParams?.event[0]
-    : searchParams?.event;
+  const eventSlugParam = Array.isArray(resolvedSearchParams?.event)
+    ? resolvedSearchParams?.event[0]
+    : resolvedSearchParams?.event;
 
   if (!id) {
-    console.warn("[ProductPage] missing product id", { rawId, searchParams });
+    console.warn("[ProductPage] missing product id", { rawId, searchParams: resolvedSearchParams });
     notFound();
   }
 
