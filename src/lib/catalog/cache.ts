@@ -74,22 +74,27 @@ type FetchCachedCatalogResult = {
   fresh: boolean;
 };
 
-function coercePrice(value: number | string | null): number {
-  if (typeof value === "number") return value;
-  if (typeof value === "string") return Number.parseFloat(value);
-  return 0;
-}
-
 export function rowToCatalogProduct(row: SelectedProductRow): CatalogProduct {
   const media = (row.media as { images?: string[] } | null) ?? null;
   const metadata = (row.product_metadata as Record<string, unknown> | null) ?? null;
+  const originCurrency = (row.currency_code ?? GBP_CURRENCY).toUpperCase();
+  const basePrice = normalisePrice(row.price);
+
+  let price = basePrice;
+  if (originCurrency !== GBP_CURRENCY) {
+    let converted = basePrice;
+    if (originCurrency === "USD") {
+      converted = basePrice * USD_TO_GBP_RATE;
+    }
+    price = Number((converted * RETAIL_MARKUP_MULTIPLIER).toFixed(2));
+  }
 
   return {
     eventId: row.event_id ?? undefined,
     id: row.cj_product_id,
     title: row.title,
-    price: coercePrice(row.price),
-    currency: row.currency_code ?? GBP_CURRENCY,
+    price,
+    currency: GBP_CURRENCY,
     inventory: row.inventory_quantity ?? undefined,
     estimatedDeliveryMinDays: row.estimated_delivery_min_days ?? undefined,
     estimatedDeliveryMaxDays: row.estimated_delivery_max_days ?? undefined,
