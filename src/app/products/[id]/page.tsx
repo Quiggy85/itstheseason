@@ -41,10 +41,17 @@ type ProductPageProps = {
 };
 
 export default async function ProductPage({ params, searchParams }: ProductPageProps) {
-  const { id } = params;
+  const rawId = Array.isArray(params?.id) ? params?.id[0] : params?.id ?? "";
+  const id = decodeURIComponent(rawId).split("?")[0]?.trim();
+
   const eventSlugParam = Array.isArray(searchParams?.event)
     ? searchParams?.event[0]
     : searchParams?.event;
+
+  if (!id) {
+    console.warn("[ProductPage] missing product id", { rawId, searchParams });
+    notFound();
+  }
 
   console.log("[ProductPage] request", { id, eventSlugParam });
 
