@@ -7,6 +7,44 @@ import type { Database } from "@/types/database";
 import type { CatalogProduct } from "./types";
 
 const CACHE_TTL_MINUTES = 60;
+const GBP_CURRENCY = "GBP";
+const USD_TO_GBP_RATE = 0.79; // approximate mid-market rate, adjust as needed
+const RETAIL_MARKUP_MULTIPLIER = 1.2; // 20% markup for profitability
+
+function normalisePrice(value: number | string | null | undefined): number {
+  if (typeof value === "number") return value;
+  if (typeof value === "string" && value.trim().length) {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
+export function calculateRetailPrice(product: CJProduct): {
+  price: number;
+  currency: string;
+  currency_code: string;
+} {
+  const basePrice = normalisePrice(product.price);
+  const originCurrency = (product.currency ?? "USD").toUpperCase();
+
+  let gbpPrice = basePrice;
+  if (originCurrency === "USD") {
+    gbpPrice = basePrice * USD_TO_GBP_RATE;
+  } else if (originCurrency !== GBP_CURRENCY) {
+    // If we encounter an unexpected currency, leave as-is for now.
+    gbpPrice = basePrice;
+  }
+
+  const markedUp = gbpPrice * RETAIL_MARKUP_MULTIPLIER;
+  const retail = Number(markedUp.toFixed(2));
+
+  return {
+    price: retail,
+    currency: GBP_CURRENCY,
+    currency_code: GBP_CURRENCY,
+  };
+}
 
 type ProductRow = Database["public"]["Tables"]["products"]["Row"];
 type ProductInsert = Database["public"]["Tables"]["products"]["Insert"];
@@ -51,7 +89,7 @@ export function rowToCatalogProduct(row: SelectedProductRow): CatalogProduct {
     id: row.cj_product_id,
     title: row.title,
     price: coercePrice(row.price),
-    currency: row.currency_code ?? "GBP",
+    currency: row.currency_code ?? GBP_CURRENCY,
     inventory: row.inventory_quantity ?? undefined,
     estimatedDeliveryMinDays: row.estimated_delivery_min_days ?? undefined,
     estimatedDeliveryMaxDays: row.estimated_delivery_max_days ?? undefined,
@@ -67,11 +105,13 @@ export function mapCJProductToCatalogProduct(
   product: CJProduct,
   context: { eventId?: string; eventSlug?: string } = {},
 ): CatalogProduct {
+  const { price, currency } = calculateRetailPrice(product);
+
   return {
     id: product.id,
     title: product.title,
-    price: product.price,
-    currency: product.currency,
+    price,
+    currency,
     eventId: context.eventId,
     eventSlug: context.eventSlug,
     inventory: product.inventory,
@@ -134,11 +174,10 @@ export async function persistProductsForEvent(
 
   const serviceClient = getSupabaseServiceClient();
   const rows: ProductInsert[] = products.map((product) => ({
+    ...calculateRetailPrice(product),
     event_id: eventId,
     cj_product_id: product.id,
     title: product.title,
-    price: product.price,
-    currency_code: product.currency,
     inventory_quantity: product.inventory ?? null,
     estimated_delivery_min_days: product.estimatedDeliveryMinDays ?? null,
     estimated_delivery_max_days: product.estimatedDeliveryMaxDays ?? null,
