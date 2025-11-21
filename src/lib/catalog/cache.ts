@@ -167,6 +167,12 @@ export async function fetchCachedCatalog(
     ? new Date(data[0].last_synced_at).getTime()
     : 0;
   const fresh = mostRecent >= threshold;
+  const targetCurrency = MARKET_CURRENCY.toUpperCase();
+  const currencyAligned = data.every((row) => {
+    const currency = row.currency_code?.toUpperCase();
+    return !currency || currency === targetCurrency;
+  });
+  const isFresh = fresh && currencyAligned;
 
   const catalogProducts = data.map(rowToCatalogProduct);
   const paginated = catalogProducts.slice(offset, offset + limit);
@@ -174,7 +180,7 @@ export async function fetchCachedCatalog(
   return {
     products: paginated,
     total: catalogProducts.length,
-    fresh,
+    fresh: isFresh,
   };
 }
 

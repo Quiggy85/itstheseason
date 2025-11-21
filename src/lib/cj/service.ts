@@ -73,6 +73,17 @@ const cache = getMemoryCache();
 const queue = getRateLimitedQueue();
 const variantIdCache = new Map<string, string | null>();
 
+function clearShippingDetails(product: CJProduct): CJProduct {
+  return {
+    ...product,
+    shippingCost: undefined,
+    shippingCurrency: undefined,
+    shippingMethod: undefined,
+    shippingEstimatedMinDays: undefined,
+    shippingEstimatedMaxDays: undefined,
+  };
+}
+
 function coerceNumber(value?: number | string | null): number | undefined {
   if (value === null || value === undefined) return undefined;
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -399,6 +410,7 @@ export async function searchCJProducts(params: CJSearchParams): Promise<CJProduc
 
   if (includeLogistics) {
     const eligibleProducts: CJProduct[] = [];
+    const fallbackProducts: CJProduct[] = [];
 
     for (const product of filteredProducts) {
       let variantId = product.defaultVariantId;
@@ -408,6 +420,7 @@ export async function searchCJProducts(params: CJSearchParams): Promise<CJProduc
 
       if (!variantId) {
         console.warn("Skipping product without variant for logistics", { productId: product.id });
+        fallbackProducts.push(clearShippingDetails(product));
         continue;
       }
 
@@ -419,6 +432,7 @@ export async function searchCJProducts(params: CJSearchParams): Promise<CJProduc
 
       if (!quote) {
         console.log("No quote for product", { productId: product.id });
+        fallbackProducts.push(clearShippingDetails(product));
         continue;
       }
 
@@ -439,7 +453,7 @@ export async function searchCJProducts(params: CJSearchParams): Promise<CJProduc
         keywords,
         destinationCountryCode,
       });
-      finalProducts = [];
+      finalProducts = fallbackProducts.length ? fallbackProducts : filteredProducts.map(clearShippingDetails);
     }
   }
 
