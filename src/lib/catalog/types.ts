@@ -8,6 +8,11 @@ export interface CatalogProduct {
   inventory?: number;
   estimatedDeliveryMinDays?: number;
   estimatedDeliveryMaxDays?: number;
+  shippingCost?: number;
+  shippingCurrency?: string;
+  shippingMethod?: string;
+  shippingEstimatedMinDays?: number;
+  shippingEstimatedMaxDays?: number;
   shippingPolicy?: string;
   returnsPolicy?: string;
   images: string[];

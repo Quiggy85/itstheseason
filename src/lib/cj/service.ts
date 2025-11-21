@@ -4,6 +4,26 @@ import { getRateLimitedQueue } from "@/lib/cj/rate-limiter";
 
 import type { CJProduct, CJSearchParams } from "./types";
 
+type FreightCalculateResponse = {
+  code: number;
+  result: boolean;
+  message: string;
+  data?: Array<{
+    logisticAging?: string;
+    logisticPrice?: number | string;
+    logisticName?: string;
+    option?: {
+      enName?: string;
+    };
+    arrivalTime?: string;
+    postage?: number | string;
+  }>;
+};
+
+const DEFAULT_DESTINATION = "GB";
+const SHIPPING_USD_TO_GBP_RATE = 0.79;
+const SHIPPING_MARKUP = 1.2;
+
 type CJSearchResponse = {
   data?: {
     pageSize?: number;
@@ -88,8 +108,84 @@ function mapProduct(raw: CJProductListItem, stores: CJStoreInfo[] = []): CJProdu
     images: raw.bigImage ? [raw.bigImage] : [],
     tags: tags.length ? tags : undefined,
     description: raw.description,
+    originCountryCode: storeCountries[0],
+    defaultVariantId: (raw as { vid?: string }).vid,
     raw: { product: raw, storeCountries },
   };
+}
+
+function parseAgingRange(value?: string): { min?: number; max?: number } {
+  if (!value) return {};
+  const match = value.match(/(\d+)\s*-\s*(\d+)/);
+  if (match) {
+    return { min: Number.parseInt(match[1], 10), max: Number.parseInt(match[2], 10) };
+  }
+  const single = Number.parseInt(value, 10);
+  return Number.isFinite(single) ? { min: single, max: single } : {};
+}
+
+function convertShippingPrice(value?: number | string | null): number | undefined {
+  if (value === undefined || value === null) return undefined;
+  const numeric = Number.parseFloat(String(value));
+  if (!Number.isFinite(numeric)) return undefined;
+  const converted = numeric * SHIPPING_USD_TO_GBP_RATE * SHIPPING_MARKUP;
+  return Number(converted.toFixed(2));
+}
+
+async function fetchFreightQuote(
+  params: {
+    variantId: string;
+    originCountryCode?: string;
+    destinationCountryCode: string;
+  },
+): Promise<{
+  price?: number;
+  method?: string;
+  minDays?: number;
+  maxDays?: number;
+} | null> {
+  const { variantId, originCountryCode, destinationCountryCode } = params;
+  try {
+    const response = await queue.enqueue(() =>
+      cjFetch<FreightCalculateResponse>("/v1/logistic/freightCalculate", {
+        method: "POST",
+        body: JSON.stringify({
+          startCountryCode: originCountryCode ?? "CN",
+          endCountryCode: destinationCountryCode,
+          products: [
+            {
+              quantity: 1,
+              vid: variantId,
+            },
+          ],
+        }),
+      }),
+    );
+
+    if (!response.result || !response.data?.length) {
+      return null;
+    }
+
+    const option = response.data[0];
+    const price =
+      convertShippingPrice(option.logisticPrice ?? option.postage) ??
+      convertShippingPrice(option.postage);
+    const { min, max } = parseAgingRange(option.logisticAging ?? option.arrivalTime);
+    const method = option.logisticName ?? option.option?.enName;
+
+    return {
+      price,
+      method: method ?? undefined,
+      minDays: min,
+      maxDays: max,
+    };
+  } catch (error) {
+    console.warn("CJ freight calculation failed", {
+      variantId,
+      error,
+    });
+    return null;
+  }
 }
 
 function filterForUkShipping(products: CJProduct[], requireUkShipping: boolean): CJProduct[] {
@@ -118,8 +214,23 @@ function filterForUkShipping(products: CJProduct[], requireUkShipping: boolean):
 }
 
 function buildCacheKey(params: CJSearchParams) {
-  const { keywords, limit = 20, offset = 0, requireUkShipping = true } = params;
-  return ["search", keywords.sort().join("-"), limit, offset, requireUkShipping].join(":");
+  const {
+    keywords,
+    limit = 20,
+    offset = 0,
+    requireUkShipping = true,
+    includeLogistics = false,
+    destinationCountryCode = DEFAULT_DESTINATION,
+  } = params;
+  return [
+    "search",
+    keywords.slice().sort().join("-"),
+    limit,
+    offset,
+    requireUkShipping,
+    includeLogistics,
+    destinationCountryCode,
+  ].join(":");
 }
 
 export async function searchCJProducts(params: CJSearchParams): Promise<CJProduct[]> {
@@ -127,7 +238,12 @@ export async function searchCJProducts(params: CJSearchParams): Promise<CJProduc
   const cached = cache.get<CJProduct[]>(cacheKey);
   if (cached) return cached;
 
-  const { keywords, requireUkShipping = true } = params;
+  const {
+    keywords,
+    requireUkShipping = true,
+    includeLogistics = false,
+    destinationCountryCode = DEFAULT_DESTINATION,
+  } = params;
   const requestedLimit = params.limit && params.limit > 0 ? params.limit : 20;
   const size = Math.min(Math.max(requestedLimit, 1), 100);
   const offset = params.offset ?? 0;
@@ -160,6 +276,26 @@ export async function searchCJProducts(params: CJSearchParams): Promise<CJProduc
 
   const limitedProducts = mappedProducts.slice(0, size);
   const filteredProducts = filterForUkShipping(limitedProducts, requireUkShipping);
+
+  if (includeLogistics) {
+    for (const product of filteredProducts) {
+      if (!product.defaultVariantId) continue;
+      const quote = await fetchFreightQuote({
+        variantId: product.defaultVariantId,
+        originCountryCode: product.originCountryCode,
+        destinationCountryCode,
+      });
+
+      if (quote) {
+        product.shippingCost = quote.price;
+        product.shippingCurrency = quote.price === undefined ? undefined : "GBP";
+        product.shippingMethod = quote.method;
+        product.shippingEstimatedMinDays = quote.minDays;
+        product.shippingEstimatedMaxDays = quote.maxDays;
+      }
+    }
+  }
+
   cache.set(cacheKey, filteredProducts, 2 * 60 * 1000);
   return filteredProducts;
 }

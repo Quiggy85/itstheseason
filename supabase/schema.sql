@@ -1,5 +1,6 @@
 -- Enable required extensions -------------------------------------------------
 
+
 create extension if not exists "pgcrypto"; -- provides gen_random_uuid()
 
 create or replace function public.set_current_timestamp_updated_at()
@@ -21,6 +22,8 @@ create table if not exists public.profiles (
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
+
+drop trigger if exists update_profiles_updated_at on public.profiles;
 
 create trigger update_profiles_updated_at
   before update on public.profiles
@@ -47,6 +50,8 @@ create table if not exists public.addresses (
 
 create index if not exists addresses_profile_id_idx on public.addresses(profile_id);
 
+drop trigger if exists update_addresses_updated_at on public.addresses;
+
 create trigger update_addresses_updated_at
   before update on public.addresses
   for each row execute procedure public.set_current_timestamp_updated_at();
@@ -72,6 +77,8 @@ create unique index if not exists payment_methods_unique_default
   on public.payment_methods(profile_id)
   where is_default;
 
+drop trigger if exists update_payment_methods_updated_at on public.payment_methods;
+
 create trigger update_payment_methods_updated_at
   before update on public.payment_methods
   for each row execute procedure public.set_current_timestamp_updated_at();
@@ -91,6 +98,8 @@ create table if not exists public.seasonal_events (
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
+
+drop trigger if exists update_seasonal_events_updated_at on public.seasonal_events;
 
 create trigger update_seasonal_events_updated_at
   before update on public.seasonal_events
@@ -157,6 +166,11 @@ create table if not exists public.products (
   inventory_quantity integer,
   estimated_delivery_min_days integer,
   estimated_delivery_max_days integer,
+  shipping_cost numeric(10, 2),
+  shipping_currency text,
+  shipping_method text,
+  shipping_estimated_min_days integer,
+  shipping_estimated_max_days integer,
   shipping_policy text,
   returns_policy text,
   product_metadata jsonb not null,
@@ -171,9 +185,26 @@ create table if not exists public.products (
 create index if not exists products_event_id_idx on public.products(event_id);
 create unique index if not exists products_cj_product_id_idx on public.products(cj_product_id);
 
+drop trigger if exists update_products_updated_at on public.products;
+
 create trigger update_products_updated_at
   before update on public.products
   for each row execute procedure public.set_current_timestamp_updated_at();
+
+alter table if exists public.products
+  add column if not exists shipping_cost numeric(10, 2);
+
+alter table if exists public.products
+  add column if not exists shipping_currency text;
+
+alter table if exists public.products
+  add column if not exists shipping_method text;
+
+alter table if exists public.products
+  add column if not exists shipping_estimated_min_days integer;
+
+alter table if exists public.products
+  add column if not exists shipping_estimated_max_days integer;
 
 create table if not exists public.inventory_snapshots (
   id bigint generated always as identity primary key,
@@ -187,13 +218,23 @@ create index if not exists inventory_snapshots_product_id_idx
 
 -- Orders ----------------------------------------------------------------------
 
-create type public.order_status as enum (
-  'pending',
-  'processing',
-  'fulfilled',
-  'cancelled',
-  'refunded'
-);
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_type t
+    where t.typname = 'order_status'
+      and t.typnamespace = 'public'::regnamespace
+  ) then
+    create type public.order_status as enum (
+      'pending',
+      'processing',
+      'fulfilled',
+      'cancelled',
+      'refunded'
+    );
+  end if;
+end $$;
 
 create table if not exists public.orders (
   id uuid primary key default gen_random_uuid(),
@@ -213,6 +254,8 @@ create table if not exists public.orders (
 
 create index if not exists orders_profile_id_idx on public.orders(profile_id);
 create index if not exists orders_payment_intent_idx on public.orders(stripe_payment_intent_id);
+
+drop trigger if exists update_orders_updated_at on public.orders;
 
 create trigger update_orders_updated_at
   before update on public.orders
@@ -249,23 +292,37 @@ alter table public.seasonal_events enable row level security;
 alter table public.seasonal_event_keywords enable row level security;
 alter table public.products enable row level security;
 
+drop policy if exists "Profiles are viewable by owner" on public.profiles;
+
 create policy "Profiles are viewable by owner" on public.profiles
   for select using (auth.uid() = id);
+
+drop policy if exists "Profiles are editable by owner" on public.profiles;
 
 create policy "Profiles are editable by owner" on public.profiles
   for update using (auth.uid() = id) with check (auth.uid() = id);
 
+drop policy if exists "Insert profile for self" on public.profiles;
+
 create policy "Insert profile for self" on public.profiles
   for insert with check (auth.uid() = id);
+
+drop policy if exists "Addresses belong to profile owner" on public.addresses;
 
 create policy "Addresses belong to profile owner" on public.addresses
   using (auth.uid() = profile_id) with check (auth.uid() = profile_id);
 
+drop policy if exists "Payment methods belong to profile owner" on public.payment_methods;
+
 create policy "Payment methods belong to profile owner" on public.payment_methods
   using (auth.uid() = profile_id) with check (auth.uid() = profile_id);
 
+drop policy if exists "Orders belong to profile owner" on public.orders;
+
 create policy "Orders belong to profile owner" on public.orders
   using (auth.uid() = profile_id) with check (auth.uid() = profile_id);
+
+drop policy if exists "Order items follow order owner" on public.order_items;
 
 create policy "Order items follow order owner" on public.order_items
   using (
@@ -283,11 +340,17 @@ create policy "Order items follow order owner" on public.order_items
     )
   );
 
+drop policy if exists "Products readable by all" on public.products;
+
 create policy "Products readable by all" on public.products
   for select using (true);
 
+drop policy if exists "Seasonal events readable by all" on public.seasonal_events;
+
 create policy "Seasonal events readable by all" on public.seasonal_events
   for select using (true);
+
+drop policy if exists "Seasonal event keywords readable by all" on public.seasonal_event_keywords;
 
 create policy "Seasonal event keywords readable by all" on public.seasonal_event_keywords
   for select using (true);

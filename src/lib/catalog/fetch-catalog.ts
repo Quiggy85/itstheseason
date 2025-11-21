@@ -112,6 +112,8 @@ export async function fetchCatalogBySlug(
       limit,
       offset,
       requireUkShipping,
+      includeLogistics: true,
+      destinationCountryCode: "GB",
     });
 
     await persistProductsForEvent(event.id, products);

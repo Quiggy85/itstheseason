@@ -11,6 +11,13 @@ export interface CJProduct {
   returnsPolicy?: string;
   images: string[];
   tags?: string[];
+  originCountryCode?: string;
+  defaultVariantId?: string;
+  shippingCost?: number;
+  shippingCurrency?: string;
+  shippingMethod?: string;
+  shippingEstimatedMinDays?: number;
+  shippingEstimatedMaxDays?: number;
   raw: unknown;
 }
 
@@ -19,4 +26,6 @@ export interface CJSearchParams {
   limit?: number;
   offset?: number;
   requireUkShipping?: boolean;
+  includeLogistics?: boolean;
+  destinationCountryCode?: string;
 }

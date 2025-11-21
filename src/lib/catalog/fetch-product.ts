@@ -14,7 +14,7 @@ export interface FetchProductResult {
 }
 
 const productSelection =
-  "event_id, cj_product_id, title, price, currency_code, inventory_quantity, estimated_delivery_min_days, estimated_delivery_max_days, shipping_policy, returns_policy, media, product_metadata, tags, last_synced_at";
+  "event_id, cj_product_id, title, price, currency_code, inventory_quantity, estimated_delivery_min_days, estimated_delivery_max_days, shipping_cost, shipping_currency, shipping_method, shipping_estimated_min_days, shipping_estimated_max_days, shipping_policy, returns_policy, media, product_metadata, tags, last_synced_at";
 
 export async function fetchProductById(productId: string): Promise<FetchProductResult> {
   if (!productId) {

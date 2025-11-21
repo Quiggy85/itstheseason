@@ -59,12 +59,16 @@ export type SelectedProductRow = Pick<
   | "inventory_quantity"
   | "estimated_delivery_min_days"
   | "estimated_delivery_max_days"
+  | "shipping_cost"
+  | "shipping_currency"
+  | "shipping_method"
+  | "shipping_estimated_min_days"
+  | "shipping_estimated_max_days"
   | "shipping_policy"
   | "returns_policy"
   | "media"
   | "product_metadata"
   | "tags"
-  | "media"
   | "last_synced_at"
 >;
 
@@ -89,6 +93,9 @@ export function rowToCatalogProduct(row: SelectedProductRow): CatalogProduct {
     price = Number((converted * RETAIL_MARKUP_MULTIPLIER).toFixed(2));
   }
 
+  const shippingCostRaw = typeof row.shipping_cost === "number" ? row.shipping_cost : null;
+  const shippingPrice = shippingCostRaw !== null ? normalisePrice(shippingCostRaw) : undefined;
+
   return {
     eventId: row.event_id ?? undefined,
     id: row.cj_product_id,
@@ -98,6 +105,11 @@ export function rowToCatalogProduct(row: SelectedProductRow): CatalogProduct {
     inventory: row.inventory_quantity ?? undefined,
     estimatedDeliveryMinDays: row.estimated_delivery_min_days ?? undefined,
     estimatedDeliveryMaxDays: row.estimated_delivery_max_days ?? undefined,
+    shippingCost: shippingPrice,
+    shippingCurrency: shippingPrice !== undefined ? GBP_CURRENCY : undefined,
+    shippingMethod: row.shipping_method ?? undefined,
+    shippingEstimatedMinDays: row.shipping_estimated_min_days ?? undefined,
+    shippingEstimatedMaxDays: row.shipping_estimated_max_days ?? undefined,
     shippingPolicy: row.shipping_policy ?? undefined,
     returnsPolicy: row.returns_policy ?? undefined,
     images: Array.isArray(media?.images) ? media?.images ?? [] : [],
@@ -122,6 +134,11 @@ export function mapCJProductToCatalogProduct(
     inventory: product.inventory,
     estimatedDeliveryMinDays: product.estimatedDeliveryMinDays,
     estimatedDeliveryMaxDays: product.estimatedDeliveryMaxDays,
+    shippingCost: product.shippingCost,
+    shippingCurrency: product.shippingCost !== undefined ? GBP_CURRENCY : undefined,
+    shippingMethod: product.shippingMethod,
+    shippingEstimatedMinDays: product.shippingEstimatedMinDays,
+    shippingEstimatedMaxDays: product.shippingEstimatedMaxDays,
     shippingPolicy: product.shippingPolicy,
     returnsPolicy: product.returnsPolicy,
     images: product.images,
@@ -140,7 +157,7 @@ export async function fetchCachedCatalog(
   const { data, error } = await supabase
     .from("products")
     .select(
-      "event_id, cj_product_id, title, price, currency_code, inventory_quantity, estimated_delivery_min_days, estimated_delivery_max_days, shipping_policy, returns_policy, media, product_metadata, tags, last_synced_at",
+      "event_id, cj_product_id, title, price, currency_code, inventory_quantity, estimated_delivery_min_days, estimated_delivery_max_days, shipping_cost, shipping_currency, shipping_method, shipping_estimated_min_days, shipping_estimated_max_days, shipping_policy, returns_policy, media, product_metadata, tags, last_synced_at",
     )
     .eq("event_id", eventId)
     .order("last_synced_at", { ascending: false })
@@ -186,6 +203,11 @@ export async function persistProductsForEvent(
     inventory_quantity: product.inventory ?? null,
     estimated_delivery_min_days: product.estimatedDeliveryMinDays ?? null,
     estimated_delivery_max_days: product.estimatedDeliveryMaxDays ?? null,
+    shipping_cost: product.shippingCost ?? null,
+    shipping_currency: product.shippingCost !== undefined ? GBP_CURRENCY : null,
+    shipping_method: product.shippingMethod ?? null,
+    shipping_estimated_min_days: product.shippingEstimatedMinDays ?? null,
+    shipping_estimated_max_days: product.shippingEstimatedMaxDays ?? null,
     shipping_policy: product.shippingPolicy ?? null,
     returns_policy: product.returnsPolicy ?? null,
     product_metadata: (product.raw ?? null) as ProductInsert["product_metadata"],

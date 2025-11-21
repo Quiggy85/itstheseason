@@ -14,6 +14,30 @@ function formatPrice(value: number, currency: string) {
   }).format(value);
 }
 
+function formatShippingDetails(product: CatalogProduct) {
+  const shippingCurrency = product.shippingCurrency ?? product.currency;
+  const shippingCostLabel =
+    typeof product.shippingCost === "number"
+      ? formatPrice(product.shippingCost, shippingCurrency)
+      : null;
+  const hasShippingWindow =
+    product.shippingEstimatedMinDays !== undefined &&
+    product.shippingEstimatedMaxDays !== undefined;
+  const shippingWindowLabel = hasShippingWindow
+    ? `${product.shippingEstimatedMinDays}–${product.shippingEstimatedMaxDays} days`
+    : product.estimatedDeliveryMinDays !== undefined && product.estimatedDeliveryMaxDays !== undefined
+      ? `${product.estimatedDeliveryMinDays}–${product.estimatedDeliveryMaxDays} days`
+      : null;
+
+  const parts: string[] = [];
+  parts.push(shippingCostLabel ? `Shipping from ${shippingCostLabel}` : "Shipping calculated at checkout");
+  if (product.shippingMethod) {
+    parts.push(product.shippingMethod);
+  }
+  parts.push(shippingWindowLabel ?? "Fast UK dispatch");
+  return parts.join(" • ");
+}
+
 function buildGalleryImages(product: CatalogProduct) {
   const urls = product.images?.length ? product.images : []; // Guard for undefined
   if (urls.length === 0) {
@@ -212,6 +236,10 @@ export default async function ProductPage({ params, searchParams }: ProductPageP
                       {product.inventory && product.inventory > 0 ? "In stock" : "Ships on demand"}
                     </p>
                   </div>
+                </div>
+                <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
+                  <p className="text-sm font-medium text-blue-900">Shipping</p>
+                  <p className="text-sm text-blue-800">{formatShippingDetails(product)}</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <button

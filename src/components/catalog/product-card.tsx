@@ -24,6 +24,27 @@ export function ProductCard({ product }: ProductCardProps) {
     product.estimatedDeliveryMinDays !== undefined &&
     product.estimatedDeliveryMaxDays !== undefined;
 
+  const shippingCurrency = product.shippingCurrency ?? product.currency;
+  const shippingCostLabel =
+    typeof product.shippingCost === "number"
+      ? formatPrice(product.shippingCost, shippingCurrency)
+      : null;
+  const hasShippingWindow =
+    product.shippingEstimatedMinDays !== undefined &&
+    product.shippingEstimatedMaxDays !== undefined;
+  const shippingWindowLabel = hasShippingWindow
+    ? `${product.shippingEstimatedMinDays}–${product.shippingEstimatedMaxDays} days`
+    : hasDeliveryWindow
+      ? `${product.estimatedDeliveryMinDays}–${product.estimatedDeliveryMaxDays} days`
+      : null;
+  const shippingDetails = [
+    shippingCostLabel ? `Shipping from ${shippingCostLabel}` : "Shipping calculated at checkout",
+  ];
+  if (product.shippingMethod) {
+    shippingDetails.push(product.shippingMethod);
+  }
+  shippingDetails.push(shippingWindowLabel ?? "Fast UK dispatch");
+
   const productLink = product.eventSlug
     ? `/products/${product.id}?event=${product.eventSlug}`
     : `/products/${product.id}`;
@@ -77,14 +98,7 @@ export function ProductCard({ product }: ProductCardProps) {
               ) : null}
             </div>
 
-            {hasDeliveryWindow ? (
-              <p className="text-xs font-medium text-blue-700/80">
-                Estimated UK delivery: {product.estimatedDeliveryMinDays}&ndash;
-                {product.estimatedDeliveryMaxDays} days
-              </p>
-            ) : (
-              <p className="text-xs font-medium text-blue-700/80">Fast dispatch from CJ partners</p>
-            )}
+            <p className="text-xs font-medium text-blue-700/80">{shippingDetails.join(" • ")}</p>
 
             {product.tags && product.tags.length > 0 ? (
               <div className="flex flex-wrap gap-2">

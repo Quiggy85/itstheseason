@@ -237,6 +237,11 @@ export type Database = {
           price: number;
           product_metadata: Json;
           returns_policy: string | null;
+          shipping_cost: number | null;
+          shipping_currency: string | null;
+          shipping_estimated_max_days: number | null;
+          shipping_estimated_min_days: number | null;
+          shipping_method: string | null;
           shipping_policy: string | null;
           slug: string | null;
           tags: string[] | null;
@@ -258,6 +263,11 @@ export type Database = {
           price: number;
           product_metadata: Json;
           returns_policy?: string | null;
+          shipping_cost?: number | null;
+          shipping_currency?: string | null;
+          shipping_estimated_max_days?: number | null;
+          shipping_estimated_min_days?: number | null;
+          shipping_method?: string | null;
           shipping_policy?: string | null;
           slug?: string | null;
           tags?: string[] | null;
@@ -279,6 +289,11 @@ export type Database = {
           price?: number;
           product_metadata?: Json;
           returns_policy?: string | null;
+          shipping_cost?: number | null;
+          shipping_currency?: string | null;
+          shipping_estimated_max_days?: number | null;
+          shipping_estimated_min_days?: number | null;
+          shipping_method?: string | null;
           shipping_policy?: string | null;
           slug?: string | null;
           tags?: string[] | null;
