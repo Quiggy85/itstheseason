@@ -66,12 +66,115 @@ type CJStoreInfo = {
 
 const cache = getMemoryCache();
 const queue = getRateLimitedQueue();
+const variantIdCache = new Map<string, string | null>();
 
 function coerceNumber(value?: number | string | null): number | undefined {
   if (value === null || value === undefined) return undefined;
   if (typeof value === "number" && Number.isFinite(value)) return value;
   const parsed = Number.parseFloat(String(value));
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+type CJVariantListResponse = {
+  result?: boolean;
+  data?:
+    | Array<{
+        variantList?: Array<Record<string, unknown>>;
+        productSkuList?: Array<Record<string, unknown>>;
+        skuList?: Array<Record<string, unknown>>;
+        variants?: Array<Record<string, unknown>>;
+      }>
+    | {
+        variantList?: Array<Record<string, unknown>>;
+        productSkuList?: Array<Record<string, unknown>>;
+        skuList?: Array<Record<string, unknown>>;
+        variants?: Array<Record<string, unknown>>;
+      };
+};
+
+type CJProductDetailResponse = {
+  result?: boolean;
+  data?: {
+    productSkuList?: Array<Record<string, unknown>>;
+    variants?: Array<Record<string, unknown>>;
+    skuList?: Array<Record<string, unknown>>;
+  };
+};
+
+function pickFirstVariantId(payload: unknown): string | undefined {
+  if (!payload) return undefined;
+  const containers = Array.isArray(payload) ? payload : [payload];
+  for (const container of containers) {
+    if (!container || typeof container !== "object") continue;
+    const { variantList, productSkuList, skuList, variants } = container as {
+      variantList?: Array<Record<string, unknown>>;
+      productSkuList?: Array<Record<string, unknown>>;
+      skuList?: Array<Record<string, unknown>>;
+      variants?: Array<Record<string, unknown>>;
+    };
+    const candidateLists = [variantList, productSkuList, skuList, variants].filter(
+      (value): value is Array<Record<string, unknown>> => Array.isArray(value),
+    );
+    for (const list of candidateLists) {
+      for (const candidate of list) {
+        if (!candidate || typeof candidate !== "object") continue;
+        const variantId =
+          (candidate.vid as string | undefined) ??
+          (candidate.variantId as string | undefined) ??
+          (candidate.id as string | undefined) ??
+          (candidate.skuId as string | undefined) ??
+          (candidate.sku as string | undefined);
+        if (variantId) {
+          return String(variantId);
+        }
+      }
+    }
+  }
+  return undefined;
+}
+
+async function fetchDefaultVariantId(productId: string): Promise<string | undefined> {
+  if (variantIdCache.has(productId)) {
+    const cached = variantIdCache.get(productId);
+    return cached ?? undefined;
+  }
+
+  const attemptVariantList = async () => {
+    try {
+      const response = await queue.enqueue(() =>
+        cjFetch<CJVariantListResponse>("/v1/product/variant/list", {
+          method: "POST",
+          body: JSON.stringify({ productId }),
+        }),
+      );
+      return pickFirstVariantId(response?.data);
+    } catch (error) {
+      console.warn("CJ variant list fetch failed", { productId, error });
+      return undefined;
+    }
+  };
+
+  const attemptProductDetail = async () => {
+    try {
+      const response = await queue.enqueue(() =>
+        cjFetch<CJProductDetailResponse>(`/v1/product/detail?productId=${productId}`, {
+          method: "GET",
+        }),
+      );
+      return pickFirstVariantId(response?.data);
+    } catch (error) {
+      console.warn("CJ product detail fetch failed", { productId, error });
+      return undefined;
+    }
+  };
+
+  let variantId = await attemptVariantList();
+  if (!variantId) {
+    variantId = await attemptProductDetail();
+  }
+
+  variantIdCache.set(productId, variantId ?? null);
+  return variantId ?? undefined;
 }
 
 function parseDeliveryEstimate(deliveryCycle?: string) {
@@ -277,25 +380,54 @@ export async function searchCJProducts(params: CJSearchParams): Promise<CJProduc
   const limitedProducts = mappedProducts.slice(0, size);
   const filteredProducts = filterForUkShipping(limitedProducts, requireUkShipping);
 
+  let finalProducts = filteredProducts;
+
   if (includeLogistics) {
+    const eligibleProducts: CJProduct[] = [];
+
     for (const product of filteredProducts) {
-      if (!product.defaultVariantId) continue;
+      let variantId = product.defaultVariantId;
+      if (!variantId) {
+        variantId = await fetchDefaultVariantId(product.id);
+      }
+
+      if (!variantId) {
+        console.warn("Skipping product without variant for logistics", { productId: product.id });
+        continue;
+      }
+
       const quote = await fetchFreightQuote({
-        variantId: product.defaultVariantId,
+        variantId,
         originCountryCode: product.originCountryCode,
         destinationCountryCode,
       });
 
-      if (quote) {
-        product.shippingCost = quote.price;
-        product.shippingCurrency = quote.price === undefined ? undefined : "GBP";
-        product.shippingMethod = quote.method;
-        product.shippingEstimatedMinDays = quote.minDays;
-        product.shippingEstimatedMaxDays = quote.maxDays;
+      if (!quote) {
+        console.log("No quote for product", { productId: product.id });
+        continue;
       }
+
+      product.defaultVariantId = variantId;
+      product.shippingCost = quote.price;
+      product.shippingCurrency = quote.price === undefined ? undefined : "GBP";
+      product.shippingMethod = quote.method;
+      product.shippingEstimatedMinDays = quote.minDays;
+      product.shippingEstimatedMaxDays = quote.maxDays;
+
+      eligibleProducts.push(product);
+    }
+
+    if (eligibleProducts.length) {
+      finalProducts = eligibleProducts;
+    } else {
+      console.warn("No products with confirmed UK logistics", {
+        keywords,
+        destinationCountryCode,
+      });
+      finalProducts = [];
     }
   }
 
-  cache.set(cacheKey, filteredProducts, 2 * 60 * 1000);
-  return filteredProducts;
+  cache.set(cacheKey, finalProducts, 2 * 60 * 1000);
+  return finalProducts;
 }
