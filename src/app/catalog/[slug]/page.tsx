@@ -22,6 +22,10 @@ type CatalogPageProps = {
 
 export default async function CatalogPage({ params, searchParams }: CatalogPageProps) {
   const { slug } = params;
+  if (!slug) {
+    console.warn("[CatalogPage] missing slug param");
+    notFound();
+  }
   const page = Number.parseInt(searchParams?.page ?? "1", 10);
   const currentPage = Number.isFinite(page) && page > 0 ? page : 1;
   const offset = (currentPage - 1) * PAGE_SIZE;
