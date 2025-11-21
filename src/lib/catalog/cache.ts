@@ -196,7 +196,10 @@ export async function persistProductsForEvent(
 
   const serviceClient = getSupabaseServiceClient();
   const rows: ProductInsert[] = products.map((product) => ({
-    ...calculateRetailPrice(product),
+    ...(() => {
+      const { price, currency_code } = calculateRetailPrice(product);
+      return { price, currency_code };
+    })(),
     event_id: eventId,
     cj_product_id: product.id,
     title: product.title,
