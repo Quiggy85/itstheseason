@@ -1,11 +1,18 @@
 import Link from "next/link";
 
 import type { CatalogProduct } from "@/lib/catalog/types";
+import { MARKET_CONFIG } from "@/config/market";
+import { formatMarketCurrency } from "@/lib/market/utils";
 
-function formatPrice(value: number, currency: string) {
-  return new Intl.NumberFormat("en-GB", {
+function formatPrice(value: number, currency?: string) {
+  const targetCurrency = currency?.toUpperCase();
+  if (!targetCurrency || targetCurrency === MARKET_CONFIG.currencyCode) {
+    return formatMarketCurrency(value);
+  }
+
+  return new Intl.NumberFormat(MARKET_CONFIG.locale, {
     style: "currency",
-    currency,
+    currency: targetCurrency,
     maximumFractionDigits: 2,
   }).format(value);
 }
@@ -43,7 +50,7 @@ export function ProductCard({ product }: ProductCardProps) {
   if (product.shippingMethod) {
     shippingDetails.push(product.shippingMethod);
   }
-  shippingDetails.push(shippingWindowLabel ?? "Fast UK dispatch");
+  shippingDetails.push(shippingWindowLabel ?? MARKET_CONFIG.shipping.fallbackTagline);
 
   const productLink = product.eventSlug
     ? `/products/${product.id}?event=${product.eventSlug}`

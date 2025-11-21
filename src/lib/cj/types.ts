@@ -25,7 +25,7 @@ export interface CJSearchParams {
   keywords: string[];
   limit?: number;
   offset?: number;
-  requireUkShipping?: boolean;
+  requireDestinationShipping?: boolean;
   includeLogistics?: boolean;
   destinationCountryCode?: string;
 }

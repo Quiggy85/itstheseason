@@ -1,15 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { CJProduct } from "@/lib/cj/types";
+import { marketShippingCurrency, toRetailCurrencyCode, toRetailPrice } from "@/lib/market/utils";
 import { getSupabaseServiceClient } from "@/lib/supabase/service-client";
 import type { Database } from "@/types/database";
 
 import type { CatalogProduct } from "./types";
 
 const CACHE_TTL_MINUTES = 60;
-const GBP_CURRENCY = "GBP";
-const USD_TO_GBP_RATE = 0.79; // approximate mid-market rate, adjust as needed
-const RETAIL_MARKUP_MULTIPLIER = 1.2; // 20% markup for profitability
+const MARKET_CURRENCY = toRetailCurrencyCode();
+const MARKET_SHIPPING_CURRENCY = marketShippingCurrency();
 
 function normalisePrice(value: number | string | null | undefined): number {
   if (typeof value === "number") return value;
@@ -26,23 +26,13 @@ export function calculateRetailPrice(product: CJProduct): {
   currency_code: string;
 } {
   const basePrice = normalisePrice(product.price);
-  const originCurrency = (product.currency ?? "USD").toUpperCase();
-
-  let gbpPrice = basePrice;
-  if (originCurrency === "USD") {
-    gbpPrice = basePrice * USD_TO_GBP_RATE;
-  } else if (originCurrency !== GBP_CURRENCY) {
-    // If we encounter an unexpected currency, leave as-is for now.
-    gbpPrice = basePrice;
-  }
-
-  const markedUp = gbpPrice * RETAIL_MARKUP_MULTIPLIER;
-  const retail = Number(markedUp.toFixed(2));
+  const supplierCurrency = product.currency ?? undefined;
+  const retail = toRetailPrice(basePrice, supplierCurrency);
 
   return {
-    price: retail,
-    currency: GBP_CURRENCY,
-    currency_code: GBP_CURRENCY,
+    price: retail.price,
+    currency: retail.currency,
+    currency_code: retail.currency,
   };
 }
 
@@ -81,32 +71,26 @@ type FetchCachedCatalogResult = {
 export function rowToCatalogProduct(row: SelectedProductRow): CatalogProduct {
   const media = (row.media as { images?: string[] } | null) ?? null;
   const metadata = (row.product_metadata as Record<string, unknown> | null) ?? null;
-  const originCurrency = (row.currency_code ?? GBP_CURRENCY).toUpperCase();
-  const basePrice = normalisePrice(row.price);
+  const currencyCode = (row.currency_code ?? MARKET_CURRENCY).toUpperCase();
+  const price = normalisePrice(row.price);
 
-  let price = basePrice;
-  if (originCurrency !== GBP_CURRENCY) {
-    let converted = basePrice;
-    if (originCurrency === "USD") {
-      converted = basePrice * USD_TO_GBP_RATE;
-    }
-    price = Number((converted * RETAIL_MARKUP_MULTIPLIER).toFixed(2));
-  }
-
-  const shippingCostRaw = typeof row.shipping_cost === "number" ? row.shipping_cost : null;
-  const shippingPrice = shippingCostRaw !== null ? normalisePrice(shippingCostRaw) : undefined;
+  const shippingCostRaw =
+    row.shipping_cost !== null && row.shipping_cost !== undefined
+      ? normalisePrice(row.shipping_cost)
+      : undefined;
+  const shippingCurrency = row.shipping_currency ?? (shippingCostRaw !== undefined ? MARKET_SHIPPING_CURRENCY : undefined);
 
   return {
     eventId: row.event_id ?? undefined,
     id: row.cj_product_id,
     title: row.title,
     price,
-    currency: GBP_CURRENCY,
+    currency: currencyCode,
     inventory: row.inventory_quantity ?? undefined,
     estimatedDeliveryMinDays: row.estimated_delivery_min_days ?? undefined,
     estimatedDeliveryMaxDays: row.estimated_delivery_max_days ?? undefined,
-    shippingCost: shippingPrice,
-    shippingCurrency: shippingPrice !== undefined ? GBP_CURRENCY : undefined,
+    shippingCost: shippingCostRaw,
+    shippingCurrency: shippingCurrency ?? undefined,
     shippingMethod: row.shipping_method ?? undefined,
     shippingEstimatedMinDays: row.shipping_estimated_min_days ?? undefined,
     shippingEstimatedMaxDays: row.shipping_estimated_max_days ?? undefined,
@@ -123,6 +107,12 @@ export function mapCJProductToCatalogProduct(
   context: { eventId?: string; eventSlug?: string } = {},
 ): CatalogProduct {
   const { price, currency } = calculateRetailPrice(product);
+  const shippingCost =
+    product.shippingCost !== undefined && product.shippingCost !== null
+      ? normalisePrice(product.shippingCost)
+      : undefined;
+  const shippingCurrency =
+    product.shippingCurrency ?? (shippingCost !== undefined ? MARKET_SHIPPING_CURRENCY : undefined);
 
   return {
     id: product.id,
@@ -134,8 +124,8 @@ export function mapCJProductToCatalogProduct(
     inventory: product.inventory,
     estimatedDeliveryMinDays: product.estimatedDeliveryMinDays,
     estimatedDeliveryMaxDays: product.estimatedDeliveryMaxDays,
-    shippingCost: product.shippingCost,
-    shippingCurrency: product.shippingCost !== undefined ? GBP_CURRENCY : undefined,
+    shippingCost,
+    shippingCurrency,
     shippingMethod: product.shippingMethod,
     shippingEstimatedMinDays: product.shippingEstimatedMinDays,
     shippingEstimatedMaxDays: product.shippingEstimatedMaxDays,
@@ -200,14 +190,25 @@ export async function persistProductsForEvent(
       const { price, currency_code } = calculateRetailPrice(product);
       return { price, currency_code };
     })(),
+    ...(() => {
+      const shippingCost =
+        product.shippingCost !== undefined && product.shippingCost !== null
+          ? normalisePrice(product.shippingCost)
+          : undefined;
+      const shippingCurrency =
+        product.shippingCurrency ?? (shippingCost !== undefined ? MARKET_SHIPPING_CURRENCY : undefined);
+
+      return {
+        shipping_cost: shippingCost ?? null,
+        shipping_currency: shippingCost !== undefined ? shippingCurrency ?? MARKET_SHIPPING_CURRENCY : null,
+      } satisfies Pick<ProductInsert, "shipping_cost" | "shipping_currency">;
+    })(),
     event_id: eventId,
     cj_product_id: product.id,
     title: product.title,
     inventory_quantity: product.inventory ?? null,
     estimated_delivery_min_days: product.estimatedDeliveryMinDays ?? null,
     estimated_delivery_max_days: product.estimatedDeliveryMaxDays ?? null,
-    shipping_cost: product.shippingCost ?? null,
-    shipping_currency: product.shippingCost !== undefined ? GBP_CURRENCY : null,
     shipping_method: product.shippingMethod ?? null,
     shipping_estimated_min_days: product.shippingEstimatedMinDays ?? null,
     shipping_estimated_max_days: product.shippingEstimatedMaxDays ?? null,

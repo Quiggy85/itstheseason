@@ -5,11 +5,18 @@ import Link from "next/link";
 import { fetchProductById } from "@/lib/catalog/fetch-product";
 import { fetchCatalogBySlug } from "@/lib/catalog/fetch-catalog";
 import type { CatalogProduct, CatalogEvent } from "@/lib/catalog/types";
+import { MARKET_CONFIG } from "@/config/market";
+import { formatMarketCurrency } from "@/lib/market/utils";
 
-function formatPrice(value: number, currency: string) {
-  return new Intl.NumberFormat("en-GB", {
+function formatPrice(value: number, currency?: string) {
+  const targetCurrency = currency?.toUpperCase();
+  if (!targetCurrency || targetCurrency === MARKET_CONFIG.currencyCode) {
+    return formatMarketCurrency(value);
+  }
+
+  return new Intl.NumberFormat(MARKET_CONFIG.locale, {
     style: "currency",
-    currency,
+    currency: targetCurrency,
     maximumFractionDigits: 2,
   }).format(value);
 }
@@ -34,7 +41,7 @@ function formatShippingDetails(product: CatalogProduct) {
   if (product.shippingMethod) {
     parts.push(product.shippingMethod);
   }
-  parts.push(shippingWindowLabel ?? "Fast UK dispatch");
+  parts.push(shippingWindowLabel ?? MARKET_CONFIG.shipping.fallbackTagline);
   return parts.join(" • ");
 }
 
@@ -97,7 +104,8 @@ export default async function ProductPage({ params, searchParams }: ProductPageP
   } else if (error?.status === 404 && eventSlugParam) {
     const { data: fallbackData, error: fallbackError } = await fetchCatalogBySlug(eventSlugParam, {
       limit: 100,
-      requireUkShipping: true,
+      requireDestinationShipping: MARKET_CONFIG.shipping.requireDestinationMatch,
+      destinationCountryCode: MARKET_CONFIG.shipping.destinationCountryCode,
     });
 
     console.log("[ProductPage] fallback fetch", {

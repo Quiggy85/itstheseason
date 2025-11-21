@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { MARKET_CONFIG } from "@/config/market";
 import { searchCJProducts } from "@/lib/cj/service";
 import { getSupabaseServerClient } from "@/lib/supabase/server-client";
 
@@ -15,7 +16,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
   const limit = Number.parseInt(request.nextUrl.searchParams.get("limit") ?? "20", 10);
   const offset = Number.parseInt(request.nextUrl.searchParams.get("offset") ?? "0", 10);
-  const requireUkShipping = request.nextUrl.searchParams.get("requireUkShipping") !== "false";
+  const requireDestinationShipping =
+    request.nextUrl.searchParams.get("requireDestinationShipping") !== "false";
+  const destinationCountryCode =
+    request.nextUrl.searchParams.get("destinationCountryCode") ??
+    MARKET_CONFIG.shipping.destinationCountryCode;
 
   const supabase = await getSupabaseServerClient();
   const { data: event, error: eventError } = await supabase
@@ -54,7 +59,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
       keywords,
       limit,
       offset,
-      requireUkShipping,
+      requireDestinationShipping,
+      destinationCountryCode,
     });
 
     return NextResponse.json({

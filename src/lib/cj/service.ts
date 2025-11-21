@@ -1,6 +1,8 @@
+import { MARKET_CONFIG } from "@/config/market";
 import { getMemoryCache } from "@/lib/cj/cache";
 import { cjFetch } from "@/lib/cj/client";
 import { getRateLimitedQueue } from "@/lib/cj/rate-limiter";
+import { marketShippingCurrency, toShippingCost } from "@/lib/market/utils";
 
 import type { CJProduct, CJSearchParams } from "./types";
 
@@ -20,9 +22,12 @@ type FreightCalculateResponse = {
   }>;
 };
 
-const DEFAULT_DESTINATION = "GB";
-const SHIPPING_USD_TO_GBP_RATE = 0.79;
-const SHIPPING_MARKUP = 1.2;
+const DEFAULT_DESTINATION = MARKET_CONFIG.shipping.destinationCountryCode;
+const DESTINATION_KEYWORDS = MARKET_CONFIG.shipping.destinationKeywords.map((keyword) =>
+  keyword.toLowerCase(),
+);
+const DESTINATION_CURRENCY = marketShippingCurrency();
+const QUOTE_CURRENCY = MARKET_CONFIG.shipping.quoteCurrency;
 
 type CJSearchResponse = {
   data?: {
@@ -231,8 +236,7 @@ function convertShippingPrice(value?: number | string | null): number | undefine
   if (value === undefined || value === null) return undefined;
   const numeric = Number.parseFloat(String(value));
   if (!Number.isFinite(numeric)) return undefined;
-  const converted = numeric * SHIPPING_USD_TO_GBP_RATE * SHIPPING_MARKUP;
-  return Number(converted.toFixed(2));
+  return toShippingCost(numeric, QUOTE_CURRENCY);
 }
 
 async function fetchFreightQuote(
@@ -291,28 +295,36 @@ async function fetchFreightQuote(
   }
 }
 
-function filterForUkShipping(products: CJProduct[], requireUkShipping: boolean): CJProduct[] {
-  if (!requireUkShipping) return products;
-  // Placeholder filtering: retain products that either explicitly mention UK delivery
-  // in their tags or shipping policy. This should be refined once CJ API shipping
-  // metadata is confirmed.
+function filterForDestinationShipping(
+  products: CJProduct[],
+  requireDestinationShipping: boolean,
+): CJProduct[] {
+  if (!requireDestinationShipping) return products;
+
   const filtered = products.filter((product) => {
-    const tagsContainUk = product.tags?.some((tag) => /uk|united kingdom/i.test(tag)) ?? false;
-    const policyMentionsUk = product.shippingPolicy
-      ? /uk|united kingdom/i.test(product.shippingPolicy)
+    const tagsContainDestination = product.tags?.some((tag) =>
+      DESTINATION_KEYWORDS.some((keyword) => tag.toLowerCase().includes(keyword)),
+    );
+
+    const policyMentionsDestination = product.shippingPolicy
+      ? DESTINATION_KEYWORDS.some((keyword) =>
+          product.shippingPolicy?.toLowerCase().includes(keyword),
+        )
       : false;
-    const rawStoreCountries = Array.isArray((product.raw as { storeCountries?: string[] })?.storeCountries)
+
+    const rawStoreCountries = Array.isArray(
+      (product.raw as { storeCountries?: string[] })?.storeCountries,
+    )
       ? ((product.raw as { storeCountries?: string[] }).storeCountries ?? [])
       : [];
-    const storeSupportsUk = rawStoreCountries.some((code) => code === "GB" || code === "UK");
-    return tagsContainUk || policyMentionsUk || storeSupportsUk;
+    const storeSupportsDestination = rawStoreCountries.some(
+      (code) => code && code.toUpperCase() === DEFAULT_DESTINATION,
+    );
+
+    return tagsContainDestination || policyMentionsDestination || storeSupportsDestination;
   });
 
   if (filtered.length) return filtered;
-
-  // If none of the heuristics matched, fall back to the full set so we don't hide
-  // potentially eligible products. This can be tightened once CJ exposes explicit
-  // destination metadata.
   return products;
 }
 
@@ -321,7 +333,7 @@ function buildCacheKey(params: CJSearchParams) {
     keywords,
     limit = 20,
     offset = 0,
-    requireUkShipping = true,
+    requireDestinationShipping = MARKET_CONFIG.shipping.requireDestinationMatch,
     includeLogistics = false,
     destinationCountryCode = DEFAULT_DESTINATION,
   } = params;
@@ -330,7 +342,7 @@ function buildCacheKey(params: CJSearchParams) {
     keywords.slice().sort().join("-"),
     limit,
     offset,
-    requireUkShipping,
+    requireDestinationShipping,
     includeLogistics,
     destinationCountryCode,
   ].join(":");
@@ -343,7 +355,7 @@ export async function searchCJProducts(params: CJSearchParams): Promise<CJProduc
 
   const {
     keywords,
-    requireUkShipping = true,
+    requireDestinationShipping = MARKET_CONFIG.shipping.requireDestinationMatch,
     includeLogistics = false,
     destinationCountryCode = DEFAULT_DESTINATION,
   } = params;
@@ -378,7 +390,10 @@ export async function searchCJProducts(params: CJSearchParams): Promise<CJProduc
   });
 
   const limitedProducts = mappedProducts.slice(0, size);
-  const filteredProducts = filterForUkShipping(limitedProducts, requireUkShipping);
+  const filteredProducts = filterForDestinationShipping(
+    limitedProducts,
+    requireDestinationShipping,
+  );
 
   let finalProducts = filteredProducts;
 
@@ -409,7 +424,7 @@ export async function searchCJProducts(params: CJSearchParams): Promise<CJProduc
 
       product.defaultVariantId = variantId;
       product.shippingCost = quote.price;
-      product.shippingCurrency = quote.price === undefined ? undefined : "GBP";
+      product.shippingCurrency = quote.price === undefined ? undefined : DESTINATION_CURRENCY;
       product.shippingMethod = quote.method;
       product.shippingEstimatedMinDays = quote.minDays;
       product.shippingEstimatedMaxDays = quote.maxDays;
@@ -420,7 +435,7 @@ export async function searchCJProducts(params: CJSearchParams): Promise<CJProduc
     if (eligibleProducts.length) {
       finalProducts = eligibleProducts;
     } else {
-      console.warn("No products with confirmed UK logistics", {
+      console.warn("No products with confirmed destination logistics", {
         keywords,
         destinationCountryCode,
       });

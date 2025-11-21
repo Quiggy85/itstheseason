@@ -47,7 +47,6 @@ export default async function CatalogPage({ params, searchParams }: CatalogPageP
   const { data, error } = await fetchCatalogBySlug(slug, {
     limit: PAGE_SIZE,
     offset,
-    requireUkShipping: true,
   });
 
   if (error?.status === 404) {

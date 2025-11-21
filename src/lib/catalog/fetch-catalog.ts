@@ -1,3 +1,4 @@
+import { MARKET_CONFIG } from "@/config/market";
 import { searchCJProducts } from "@/lib/cj/service";
 import { getSupabaseServerClient } from "@/lib/supabase/server-client";
 import { fetchCachedCatalog, persistProductsForEvent, mapCJProductToCatalogProduct } from "@/lib/catalog/cache";
@@ -8,7 +9,8 @@ import type { CatalogResponse } from "./types";
 export interface FetchCatalogOptions {
   limit?: number;
   offset?: number;
-  requireUkShipping?: boolean;
+  requireDestinationShipping?: boolean;
+  destinationCountryCode?: string;
 }
 
 export interface FetchCatalogResult {
@@ -21,7 +23,12 @@ export interface FetchCatalogResult {
 
 export async function fetchCatalogBySlug(
   slug: string,
-  { limit = 20, offset = 0, requireUkShipping = true }: FetchCatalogOptions = {},
+  {
+    limit = 20,
+    offset = 0,
+    requireDestinationShipping = MARKET_CONFIG.shipping.requireDestinationMatch,
+    destinationCountryCode = MARKET_CONFIG.shipping.destinationCountryCode,
+  }: FetchCatalogOptions = {},
 ): Promise<FetchCatalogResult> {
   if (!slug) {
     return { error: { status: 400, message: "Missing seasonal event." } };
@@ -50,7 +57,8 @@ export async function fetchCatalogBySlug(
     return await fetchCatalogWithoutPersistence({
       limit,
       offset,
-      requireUkShipping,
+      requireDestinationShipping,
+      destinationCountryCode,
       fallbackEvent: {
         id: slug,
         name: seasonalConfig.name,
@@ -111,9 +119,9 @@ export async function fetchCatalogBySlug(
       keywords,
       limit,
       offset,
-      requireUkShipping,
+      requireDestinationShipping,
       includeLogistics: true,
-      destinationCountryCode: "GB",
+      destinationCountryCode,
     });
 
     await persistProductsForEvent(event.id, products);
@@ -170,7 +178,8 @@ export async function fetchCatalogBySlug(
 interface FallbackCatalogOptions {
   limit: number;
   offset: number;
-  requireUkShipping: boolean;
+  requireDestinationShipping: boolean;
+  destinationCountryCode: string;
   fallbackEvent: CatalogResponse["event"];
   keywords: string[];
   eventSlug: string;
@@ -179,7 +188,8 @@ interface FallbackCatalogOptions {
 async function fetchCatalogWithoutPersistence({
   limit,
   offset,
-  requireUkShipping,
+  requireDestinationShipping,
+  destinationCountryCode,
   fallbackEvent,
   keywords,
   eventSlug,
@@ -189,7 +199,8 @@ async function fetchCatalogWithoutPersistence({
       keywords,
       limit,
       offset,
-      requireUkShipping,
+      requireDestinationShipping,
+      destinationCountryCode,
     });
 
     const mappedProducts = products.map((product) =>

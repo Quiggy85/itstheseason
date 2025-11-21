@@ -9,7 +9,6 @@ export default async function Home() {
   const seasonalConfig = getCurrentSeasonalEvent();
   const { data, error } = await fetchCatalogBySlug(seasonalConfig.slug, {
     limit: 24,
-    requireUkShipping: true,
   });
 
   if (error || !data) {
@@ -44,7 +43,7 @@ export default async function Home() {
           <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
             <span className="inline-flex items-center gap-2 text-sky-800">
               <span className="text-lg">🎉</span>
-              Free UK-wide delivery on every seasonal pick this week only.
+              Fast US delivery on every seasonal pick this week only.
             </span>
             <Link
               href={`/catalog/${data.event.slug}`}
@@ -87,26 +86,26 @@ export default async function Home() {
         <section className="grid gap-6 rounded-3xl bg-white/70 p-8 shadow-sm backdrop-blur sm:grid-cols-3">
           {[{
             title: "Seasonally curated",
-            description: "Each collection is timed to UK festivities with keywords that track the latest trends.",
+            description: "Each collection is timed to US festivities with keywords that track the latest trends.",
             icon: "🗓️",
           }, {
-            title: "Verified UK delivery",
+            title: "Verified US delivery",
             description: "We vet suppliers for reliable shipping times and returns policies you can trust.",
             icon: "🚚",
           }, {
-            title: "Ready for gifting",
-            description: "From packaging inspiration to matching sets, we surface products primed for presents.",
-            icon: "🎁",
-          }].map((item) => (
+            title: "Hassle-free returns",
+            description: "Each supplier provides a clear returns policy so you know exactly what to expect when ordering.",
+            icon: "🔄",
+          }].map((feature) => (
             <article
-              key={item.title}
+              key={feature.title}
               className="group rounded-2xl border border-zinc-100 bg-white/80 p-6 transition hover:-translate-y-1 hover:border-blue-100 hover:shadow-md"
             >
               <span className="text-2xl" aria-hidden>
-                {item.icon}
+                {feature.icon}
               </span>
-              <h3 className="mt-4 text-lg font-semibold text-zinc-900">{item.title}</h3>
-              <p className="mt-2 text-sm text-zinc-600">{item.description}</p>
+              <h3 className="mt-4 text-lg font-semibold text-zinc-900">{feature.title}</h3>
+              <p className="mt-2 text-sm text-zinc-600">{feature.description}</p>
             </article>
           ))}
         </section>
@@ -116,7 +115,7 @@ export default async function Home() {
           <div className="relative z-10 max-w-xl space-y-4">
             <h2 className="text-3xl font-semibold sm:text-4xl">Need help finding the perfect piece?</h2>
             <p className="text-sm sm:text-base text-blue-100">
-              Tell us about your upcoming event and we’ll source a tailored set of UK-ready products from the catalogue.
+              Tell us about your upcoming event and we’ll source a tailored set of US-ready products from the catalogue.
             </p>
             <Link
               href="/support/contact"
