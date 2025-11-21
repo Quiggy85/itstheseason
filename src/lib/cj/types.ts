@@ -12,6 +12,7 @@ export interface CJProduct {
   images: string[];
   tags?: string[];
   originCountryCode?: string;
+  originWarehouseId?: string;
   defaultVariantId?: string;
   shippingCost?: number;
   shippingCurrency?: string;

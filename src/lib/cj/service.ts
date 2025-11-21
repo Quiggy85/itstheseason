@@ -49,6 +49,10 @@ type CJProductListItem = {
   nameEn?: string;
   productSku?: string;
   bigImage?: string;
+  smallImage?: string;
+  listImage?: string;
+  middleImage?: string;
+  images?: string;
   sellPrice?: number | string;
   nowPrice?: number | string;
   currency?: string;
@@ -89,6 +93,51 @@ function coerceNumber(value?: number | string | null): number | undefined {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   const parsed = Number.parseFloat(String(value));
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function collectImageUrls(raw: CJProductListItem): string[] {
+  const urls = new Set<string>();
+
+  const add = (value: unknown) => {
+    if (!value) return;
+    if (Array.isArray(value)) {
+      value.forEach(add);
+      return;
+    }
+    if (typeof value === "object") {
+      for (const entry of Object.values(value as Record<string, unknown>)) {
+        add(entry);
+      }
+      return;
+    }
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (!trimmed) return;
+
+      if (trimmed.includes(",") || trimmed.includes("|") || trimmed.includes(";")) {
+        trimmed.split(/[,|;]/).forEach((segment) => add(segment));
+        return;
+      }
+
+      if (trimmed.startsWith("http")) {
+        urls.add(trimmed);
+      }
+    }
+  };
+
+  add(raw.bigImage);
+  add(raw.smallImage);
+  add(raw.middleImage);
+  add(raw.listImage);
+  add(raw.images);
+  const extendedRaw = raw as Record<string, unknown>;
+  add(extendedRaw.imageList);
+  add(extendedRaw.productImages);
+  add(extendedRaw.productImageList);
+  add(extendedRaw.imageUrlList);
+  add(extendedRaw.imageInfoList);
+
+  return Array.from(urls);
 }
 
 type CJVariantListResponse = {
@@ -224,10 +273,14 @@ function mapProduct(raw: CJProductListItem, stores: CJStoreInfo[] = []): CJProdu
     estimatedDeliveryMaxDays: estimate.max,
     shippingPolicy: undefined,
     returnsPolicy: undefined,
-    images: raw.bigImage ? [raw.bigImage] : [],
+    images: (() => {
+      const images = collectImageUrls(raw);
+      return images.length ? images : [];
+    })(),
     tags: tags.length ? tags : undefined,
     description: raw.description,
     originCountryCode: storeCountries[0],
+    originWarehouseId: stores[0]?.warehouseId,
     defaultVariantId: (raw as { vid?: string }).vid,
     raw: { product: raw, storeCountries },
   };
@@ -255,6 +308,7 @@ async function fetchFreightQuote(
     variantId: string;
     originCountryCode?: string;
     destinationCountryCode: string;
+    warehouseId?: string;
   },
 ): Promise<{
   price?: number;
@@ -262,21 +316,27 @@ async function fetchFreightQuote(
   minDays?: number;
   maxDays?: number;
 } | null> {
-  const { variantId, originCountryCode, destinationCountryCode } = params;
+  const { variantId, originCountryCode, destinationCountryCode, warehouseId } = params;
   try {
+    const payload: Record<string, unknown> = {
+      startCountryCode: originCountryCode ?? "CN",
+      endCountryCode: destinationCountryCode,
+      products: [
+        {
+          quantity: 1,
+          vid: variantId,
+        },
+      ],
+    };
+
+    if (warehouseId) {
+      payload.warehouseId = warehouseId;
+    }
+
     const response = await queue.enqueue(() =>
       cjFetch<FreightCalculateResponse>("/v1/logistic/freightCalculate", {
         method: "POST",
-        body: JSON.stringify({
-          startCountryCode: originCountryCode ?? "CN",
-          endCountryCode: destinationCountryCode,
-          products: [
-            {
-              quantity: 1,
-              vid: variantId,
-            },
-          ],
-        }),
+        body: JSON.stringify(payload),
       }),
     );
 
@@ -428,6 +488,7 @@ export async function searchCJProducts(params: CJSearchParams): Promise<CJProduc
         variantId,
         originCountryCode: product.originCountryCode,
         destinationCountryCode,
+        warehouseId: product.originWarehouseId,
       });
 
       if (!quote) {
