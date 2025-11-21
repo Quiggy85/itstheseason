@@ -11,26 +11,38 @@ import { fetchCatalogBySlug } from "@/lib/catalog/fetch-catalog";
 
 const PAGE_SIZE = 24;
 
+type MaybePromise<T> = T | Promise<T>;
+
 type CatalogPageProps = {
-  params: {
-    slug: string;
-  };
-  searchParams?: {
+  params: MaybePromise<{
+    slug?: string;
+  }>;
+  searchParams?: MaybePromise<{
     page?: string;
-  };
+  }>;
 };
 
 export default async function CatalogPage({ params, searchParams }: CatalogPageProps) {
-  const { slug } = params;
+  const resolvedParams = await params;
+  const resolvedSearchParams = await searchParams;
+
+  const slug = resolvedParams?.slug;
   if (!slug) {
-    console.warn("[CatalogPage] missing slug param");
+    console.warn("[CatalogPage] missing slug param", { params: resolvedParams, searchParams: resolvedSearchParams });
     notFound();
   }
-  const page = Number.parseInt(searchParams?.page ?? "1", 10);
+  const rawPage = resolvedSearchParams?.page ?? "1";
+  const page = Number.parseInt(rawPage, 10);
   const currentPage = Number.isFinite(page) && page > 0 ? page : 1;
   const offset = (currentPage - 1) * PAGE_SIZE;
 
-  console.log("[CatalogPage] request", { slug, currentPage, offset });
+  console.log("[CatalogPage] request", {
+    params: resolvedParams,
+    searchParams: resolvedSearchParams,
+    slug,
+    currentPage,
+    offset,
+  });
 
   const { data, error } = await fetchCatalogBySlug(slug, {
     limit: PAGE_SIZE,
