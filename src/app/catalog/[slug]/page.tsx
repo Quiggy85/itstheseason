@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+export const dynamic = "force-dynamic";
+
 import { SeasonalHero } from "@/components/catalog/seasonal-hero";
 import { ProductCard } from "@/components/catalog/product-card";
 import { getSeasonalEventBySlug } from "@/config/seasonal-events";
