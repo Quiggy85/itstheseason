@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 import { SeasonalHero } from "@/components/catalog/seasonal-hero";
 import { ProductCard } from "@/components/catalog/product-card";
@@ -24,6 +25,8 @@ export default async function CatalogPage({ params, searchParams }: CatalogPageP
   const page = Number.parseInt(searchParams?.page ?? "1", 10);
   const currentPage = Number.isFinite(page) && page > 0 ? page : 1;
   const offset = (currentPage - 1) * PAGE_SIZE;
+
+  console.log("[CatalogPage] request", { slug, currentPage, offset });
 
   const { data, error } = await fetchCatalogBySlug(slug, {
     limit: PAGE_SIZE,
