@@ -1,6 +1,9 @@
-const AVASAM_BASE_URL = process.env.AVASAM_API_BASE_URL ?? "https://app.avasam.com/apiseeker";
-const AVASAM_USERNAME = process.env.AVASAM_API_USERNAME;
-const AVASAM_PASSWORD = process.env.AVASAM_API_PASSWORD;
+const AVASAM_BASE_URL =
+  process.env.AVASAM_API_BASE_URL ?? "https://app.avasam.com/apiseeker";
+const AVASAM_AUTH_URL =
+  process.env.AVASAM_API_AUTH_URL ?? "https://app.avasam.com/api/auth";
+const AVASAM_CONSUMER_KEY = process.env.AVASAM_API_CONSUMER_KEY;
+const AVASAM_CONSUMER_SECRET = process.env.AVASAM_API_CONSUMER_SECRET;
 
 export type AvasamProduct = {
   SKU: string;
@@ -13,19 +16,28 @@ export type AvasamProduct = {
   Category?: string;
 };
 
+let cachedToken: { token: string; expiresAt: number } | null = null;
+
 async function getAuthKey(): Promise<string> {
-  if (!AVASAM_USERNAME || !AVASAM_PASSWORD) {
-    throw new Error("Avasam credentials are not set. AVASAM_API_USERNAME and AVASAM_API_PASSWORD are required.");
+  // Reuse token if it hasn't expired yet
+  if (cachedToken && cachedToken.expiresAt > Date.now() + 30_000) {
+    return cachedToken.token;
   }
 
-  const res = await fetch(`${AVASAM_BASE_URL}/Login`, {
+  if (!AVASAM_CONSUMER_KEY || !AVASAM_CONSUMER_SECRET) {
+    throw new Error(
+      "Avasam consumer credentials are not set. AVASAM_API_CONSUMER_KEY and AVASAM_API_CONSUMER_SECRET are required.",
+    );
+  }
+
+  const res = await fetch(`${AVASAM_AUTH_URL}/request-token`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      Username: AVASAM_USERNAME,
-      Password: AVASAM_PASSWORD,
+      consumer_key: AVASAM_CONSUMER_KEY,
+      secret_key: AVASAM_CONSUMER_SECRET,
     }),
   });
 
@@ -33,16 +45,30 @@ async function getAuthKey(): Promise<string> {
     throw new Error(`Failed to authenticate with Avasam: ${res.status}`);
   }
 
-  const data = await res.json();
+  const data: { access_token?: string; expires_at?: string } = await res.json();
 
-  if (!data.Authkey) {
-    throw new Error("Avasam login response did not contain Authkey. Please verify credentials and API docs.");
+  if (!data.access_token) {
+    throw new Error(
+      "Avasam request-token response did not contain access_token. Please verify credentials and API docs.",
+    );
   }
 
-  return data.Authkey as string;
+  let expiresAt = Date.now() + 5 * 60 * 1000; // fallback 5 minutes
+  if (data.expires_at) {
+    const parsed = Date.parse(data.expires_at);
+    if (!Number.isNaN(parsed)) {
+      expiresAt = parsed;
+    }
+  }
+
+  cachedToken = { token: data.access_token, expiresAt };
+
+  return data.access_token;
 }
 
-export async function getProductsBySkus(skus: string[]): Promise<AvasamProduct[]> {
+export async function getProductsBySkus(
+  skus: string[],
+): Promise<AvasamProduct[]> {
   if (skus.length === 0) return [];
 
   const authKey = await getAuthKey();
