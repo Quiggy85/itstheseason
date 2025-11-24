@@ -342,6 +342,59 @@ export function ProductClient({ product }: { product: SeasonalProduct }) {
           )}
         </div>
 
+        {variantsWithMeta.length > 0 && (
+          <div className="space-y-3">
+            <p className="text-sm font-medium text-slate-700">Choose a style</p>
+            <div className="flex flex-wrap gap-2">
+              {variantsWithMeta.map(({ variant: v, index, primary, secondary, code, thumb }) => {
+                const isActive = index === selectedVariantIndex;
+                return (
+                  <button
+                    key={v.SKU}
+                    type="button"
+                    onClick={() => {
+                      if (selectedVariantIndex === index) {
+                        setSelectedVariantIndex(null);
+                      } else {
+                        setSelectedVariantIndex(index);
+                      }
+                    }}
+                    className={`flex items-center gap-2 rounded-full border px-2 py-1 text-xs font-medium transition ${
+                      isActive
+                        ? "border-slate-900 bg-slate-900 text-white"
+                        : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                    }`}
+                  >
+                    {thumb && (
+                      <span className="relative h-7 w-7 overflow-hidden rounded-full bg-slate-100">
+                        <Image
+                          src={thumb}
+                          alt={primary}
+                          fill
+                          sizes="32px"
+                          className="object-cover"
+                        />
+                      </span>
+                    )}
+                    <span className="text-left leading-tight">
+                      <span className="text-sm font-semibold text-slate-900">{primary}</span>
+                      {(secondary || (code && !primary.toUpperCase().includes(code.toUpperCase()))) && (
+                        <span className="block text-[10px] font-normal opacity-80">
+                          {[secondary, code && !primary.toUpperCase().includes(code.toUpperCase())
+                            ? `Colour ${code.toUpperCase()}`
+                            : null]
+                            .filter(Boolean)
+                            .join(" • ")}
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="space-y-4">
           <div className="flex items-baseline gap-3">
             {displayPrice?.kind === "single" && (
@@ -354,81 +407,26 @@ export function ProductClient({ product }: { product: SeasonalProduct }) {
                 £{displayPrice.min.toFixed(2)} – £{displayPrice.max.toFixed(2)}
               </span>
             )}
-            <span className="text-xs uppercase tracking-[0.25em] text-slate-400">
-              Vat & markup included
-            </span>
           </div>
-          {variantsWithMeta.length > 0 && (
-            <div className="space-y-3">
-              <p className="text-sm font-medium text-slate-700">Choose a style</p>
-              <div className="flex flex-wrap gap-2">
-                {variantsWithMeta.map(({ variant: v, index, primary, secondary, code, thumb }) => {
-                  const isActive = index === selectedVariantIndex;
-                  return (
-                    <button
-                      key={v.SKU}
-                      type="button"
-                      onClick={() => {
-                        if (selectedVariantIndex === index) {
-                          setSelectedVariantIndex(null);
-                        } else {
-                          setSelectedVariantIndex(index);
-                        }
-                      }}
-                      className={`flex items-center gap-2 rounded-full border px-2 py-1 text-xs font-medium transition ${
-                        isActive
-                          ? "border-slate-900 bg-slate-900 text-white"
-                          : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
-                      }`}
-                    >
-                      {thumb && (
-                        <span className="relative h-7 w-7 overflow-hidden rounded-full bg-slate-100">
-                          <Image
-                            src={thumb}
-                            alt={primary}
-                            fill
-                            sizes="32px"
-                            className="object-cover"
-                          />
-                        </span>
-                      )}
-                      <span className="text-left leading-tight">
-                        <span className="text-sm font-semibold text-slate-900">{primary}</span>
-                        {(secondary || (code && !primary.toUpperCase().includes(code.toUpperCase()))) && (
-                          <span className="block text-[10px] font-normal opacity-80">
-                            {[secondary, code && !primary.toUpperCase().includes(code.toUpperCase())
-                              ? `Colour ${code.toUpperCase()}`
-                              : null]
-                              .filter(Boolean)
-                              .join(" • ")}
-                          </span>
-                        )}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+
+          {specItems.length > 0 && (
+            <div className="space-y-4">
+              <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">
+                Specifications
+              </h2>
+              <dl className="grid gap-3 text-sm text-slate-600 md:grid-cols-2">
+                {specItems.map((spec) => (
+                  <div key={`${spec.label}-${spec.value}`} className="rounded-xl border border-slate-100 p-3">
+                    <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      {spec.label}
+                    </dt>
+                    <dd className="mt-1 text-sm text-slate-700">{spec.value}</dd>
+                  </div>
+                ))}
+              </dl>
             </div>
           )}
         </div>
-
-        {specItems.length > 0 && (
-          <div className="space-y-4">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">
-              Specifications
-            </h2>
-            <dl className="grid gap-3 text-sm text-slate-600 md:grid-cols-2">
-              {specItems.map((spec) => (
-                <div key={`${spec.label}-${spec.value}`} className="rounded-xl border border-slate-100 p-3">
-                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    {spec.label}
-                  </dt>
-                  <dd className="mt-1 text-sm text-slate-700">{spec.value}</dd>
-                </div>
-              ))}
-            </dl>
-          </div>
-        )}
         <div className="rounded-2xl border border-slate-200/60 bg-slate-50 p-4 text-sm text-slate-600">
           Free UK delivery over £35 · Easy seasonal returns within 30 days
         </div>
