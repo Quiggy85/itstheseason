@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { SeasonalProduct } from "@/lib/products";
 import { ImageGallery } from "./ImageGallery";
@@ -39,7 +39,7 @@ export function ProductClient({ product }: { product: SeasonalProduct }) {
       avasam.ExtendedProperties.forEach((prop) => {
         if (!prop || typeof prop.Value !== "string") return;
         const name = prop.Name?.toString() ?? "";
-        const match = /colour\s+([A-Za-z0-9]+)/i.exec(name);
+        const match = /colou?r\W*([A-Za-z0-9]+)/i.exec(name);
         if (match && match[1]) {
           map.set(match[1].toUpperCase(), prop.Value.trim());
         }
@@ -112,86 +112,118 @@ export function ProductClient({ product }: { product: SeasonalProduct }) {
     return null;
   }, [avasam, product.price_with_markup, selectedVariant, variants]);
 
-  const variantLabel = (v: any) => {
-    const attributes = (v && typeof v === "object" && v.Attributes) || null;
-
-    const attrEntries = attributes && typeof attributes === "object"
-      ? Object.entries(attributes as Record<string, unknown>)
-      : [];
-
-    const codeCandidate = (() => {
-      const raw = attrEntries.find(([key]) => key.toLowerCase().includes("colour"))?.[1]
-        ?? (typeof v.color === "string" ? v.color : undefined)
-        ?? (typeof v.Colour === "string" ? v.Colour : undefined);
-      if (typeof raw === "string" && raw.trim()) {
-        return raw.trim();
-      }
-      return undefined;
-    })();
-
-    if (codeCandidate) {
-      const mapped = variantColourMap.get(codeCandidate.toUpperCase());
-      if (mapped) {
-        return { label: mapped, code: codeCandidate };
-      }
-    }
-
-    const colourNameFromAttributes = attrEntries
-      .filter(([key]) => key.toLowerCase().includes("colour") || key.toLowerCase().includes("color"))
-      .map(([, value]) => (typeof value === "string" ? value.trim() : ""))
-      .find((value) => value.length > 1 && !/^[A-Za-z]\d?$/u.test(value));
-
-    if (colourNameFromAttributes) {
-      return { label: colourNameFromAttributes, code: codeCandidate };
-    }
-
-    const otherAttrCandidate = attrEntries
-      .map(([, value]) => (typeof value === "string" ? value.trim() : ""))
-      .find((value) => value.length > 1 && !/^[A-Za-z]\d?$/u.test(value));
-
-    if (otherAttrCandidate) {
-      return { label: otherAttrCandidate, code: codeCandidate };
-    }
-
-    const topLevelCandidates = [
-      v.ColourName,
-      v.ColorName,
-      v.Name,
-      v.Label,
-    ].filter((value): value is string => typeof value === "string" && value.trim().length > 1);
-
-    if (topLevelCandidates[0]) {
-      return { label: topLevelCandidates[0].trim(), code: codeCandidate };
-    }
-
-    if (codeCandidate) {
-      return { label: `Colour ${codeCandidate.toUpperCase()}`, code: codeCandidate };
-    }
-
-    return { label: `Variant`, code: undefined };
-  };
-
   const variantsWithMeta = useMemo(() => {
     return variants
       .map((variant, index) => {
-        const meta = variantLabel(variant);
+        const attributes =
+          variant && typeof variant === "object" && typeof variant.Attributes === "object"
+            ? (variant.Attributes as Record<string, unknown>)
+          : {};
+        const attrEntries = Object.entries(attributes);
+
+        const codeCandidate = (() => {
+          const fromAttr = attrEntries.find(([key]) => key.toLowerCase().includes("colour"));
+          if (fromAttr && typeof fromAttr[1] === "string" && fromAttr[1].trim()) {
+            return fromAttr[1].trim();
+          }
+          if (typeof variant.color === "string" && variant.color.trim()) {
+            return variant.color.trim();
+          }
+          if (typeof variant.Colour === "string" && variant.Colour.trim()) {
+            return variant.Colour.trim();
+          }
+          return undefined;
+        })();
+
+        let colourName: string | undefined;
+        if (codeCandidate) {
+          colourName = variantColourMap.get(codeCandidate.toUpperCase());
+        }
+
+        if (!colourName) {
+          colourName = attrEntries
+            .filter(([key]) => key.toLowerCase().includes("colour") || key.toLowerCase().includes("color"))
+            .map(([, value]) => (typeof value === "string" ? value.trim() : ""))
+            .find((value) => value.length > 1 && !/^[A-Za-z]\d?$/u.test(value));
+        }
+
+        if (!colourName) {
+          colourName = [variant.ColourName, variant.ColorName, variant.Name, variant.Label]
+            .map((value) => (typeof value === "string" ? value.trim() : ""))
+            .find((value) => value.length > 1 && !/^[A-Za-z]\d?$/u.test(value)) || undefined;
+        }
+
+        const styleEntry = attrEntries.find(([key]) => key.toLowerCase().includes("style"));
+        const rawStyle = styleEntry && typeof styleEntry[1] === "string" ? styleEntry[1].trim() : undefined;
+        const styleNumber = rawStyle ? Number.parseInt(rawStyle.replace(/[^0-9]/g, ""), 10) : undefined;
+        const styleLabel = rawStyle
+          ? rawStyle.toLowerCase().includes("style")
+            ? rawStyle.replace(/\s+/g, " ")
+            : `Style ${rawStyle}`
+          : undefined;
+
+        let primary = colourName;
+        const secondaryParts: string[] = [];
+
+        if (!primary && styleLabel) {
+          primary = styleLabel;
+        } else if (primary && styleLabel) {
+          secondaryParts.push(styleLabel);
+        }
+
+        if (!primary && codeCandidate) {
+          primary = `Colour ${codeCandidate.toUpperCase()}`;
+        } else if (codeCandidate && primary && !primary.toUpperCase().includes(codeCandidate.toUpperCase())) {
+          secondaryParts.push(`Colour ${codeCandidate.toUpperCase()}`);
+        }
+
+        const fallbackPrimary = variant.SKU && typeof variant.SKU === "string" ? variant.SKU : "Variant";
+        const primaryTitle = (primary ?? fallbackPrimary).trim();
+
+        const secondary = secondaryParts.length > 0 ? secondaryParts.join(" • ") : undefined;
+
         const thumb =
           variant.MainImage ??
           (Array.isArray(variant.Images) && variant.Images.length > 0
             ? (variant.Images[0] as string)
             : null);
 
+        const sortKey =
+          typeof styleNumber === "number" && !Number.isNaN(styleNumber)
+            ? `style-${styleNumber.toString().padStart(3, "0")}`
+            : primaryTitle.toLowerCase();
+
         return {
           variant,
           index,
-          label: meta.label,
-          code: meta.code,
+          primary: primaryTitle,
+          secondary,
+          code: codeCandidate,
           thumb,
-          sortKey: meta.label.toLowerCase(),
+          sortKey,
+          styleNumber: typeof styleNumber === "number" && !Number.isNaN(styleNumber)
+            ? styleNumber
+            : undefined,
         };
       })
-      .sort((a, b) => a.sortKey.localeCompare(b.sortKey, undefined, { sensitivity: "base" }));
-  }, [variants, variantLabel]);
+      .sort((a, b) =>
+        a.sortKey.localeCompare(b.sortKey, undefined, { numeric: true, sensitivity: "base" }),
+      );
+  }, [variants, variantColourMap]);
+
+  useEffect(() => {
+    if (variantsWithMeta.length > 0) {
+      console.log(
+        "Avasam variants",
+        variantsWithMeta.map(({ primary, secondary, code, styleNumber }) => ({
+          primary,
+          secondary,
+          code,
+          styleNumber,
+        })),
+      );
+    }
+  }, [variantsWithMeta]);
 
   return (
     <div className="grid gap-8 lg:grid-cols-[minmax(0,_3fr)_minmax(0,_2fr)]">
@@ -249,7 +281,7 @@ export function ProductClient({ product }: { product: SeasonalProduct }) {
             <div className="space-y-2 text-xs">
               <p className="font-medium text-slate-700">Variant</p>
               <div className="flex flex-wrap gap-2">
-                {variantsWithMeta.map(({ variant: v, index, label, code, thumb }) => {
+                {variantsWithMeta.map(({ variant: v, index, primary, secondary, code, thumb }) => {
                   const isActive = index === selectedVariantIndex;
                   return (
                     <button
@@ -272,17 +304,23 @@ export function ProductClient({ product }: { product: SeasonalProduct }) {
                         <span className="relative h-7 w-7 overflow-hidden rounded-full bg-slate-100">
                           <Image
                             src={thumb}
-                            alt={label}
+                            alt={primary}
                             fill
                             sizes="32px"
                             className="object-cover"
                           />
                         </span>
                       )}
-                      <span>
-                        {label}
-                        {code && !label.toUpperCase().includes(code.toUpperCase()) && (
-                          <span className="ml-1 text-[10px] opacity-80">({code.toUpperCase()})</span>
+                      <span className="text-left leading-tight">
+                        <span className="font-semibold">{primary}</span>
+                        {(secondary || (code && !primary.toUpperCase().includes(code.toUpperCase()))) && (
+                          <span className="block text-[10px] font-normal opacity-80">
+                            {[secondary, code && !primary.toUpperCase().includes(code.toUpperCase())
+                              ? `Colour ${code.toUpperCase()}`
+                              : null]
+                              .filter(Boolean)
+                              .join(" • ")}
+                          </span>
                         )}
                       </span>
                     </button>
