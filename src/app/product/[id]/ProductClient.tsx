@@ -29,6 +29,24 @@ function computeVariantPriceWithMarkup(parent: AvasamProduct | null, variant: an
   return Math.round(baseIncVat * (1 + MARKUP_PERCENT / 100) * 100) / 100;
 }
 
+const SPEC_EXCLUDE_KEYWORDS = ["wholesale", "dropship", "supplier", "dispatch", "lead time"];
+
+function formatSpecLabel(label: string) {
+  return label
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatMeasurement(value: number) {
+  if (!Number.isFinite(value)) return null;
+  const abs = Math.abs(value);
+  const formatted = abs >= 10 ? value.toFixed(0) : value.toFixed(1);
+  return formatted.replace(/\.0$/, "");
+}
+
 export function ProductClient({ product }: { product: SeasonalProduct }) {
   const avasam = product.avasam ?? null;
   const variants = useMemo(() => (avasam?.Variations as any[]) ?? [], [avasam]);
@@ -111,6 +129,61 @@ export function ProductClient({ product }: { product: SeasonalProduct }) {
 
     return null;
   }, [avasam, product.price_with_markup, selectedVariant, variants]);
+
+  const specItems = useMemo(() => {
+    const entries: { label: string; value: string }[] = [];
+    const seen = new Set<string>();
+    const addEntry = (label: string, value: string | null | undefined) => {
+      const formattedLabel = formatSpecLabel(label);
+      if (!value) return;
+      const trimmedValue = value.toString().trim();
+      if (!trimmedValue) return;
+      const key = formattedLabel.toLowerCase();
+      if (seen.has(key)) return;
+      entries.push({ label: formattedLabel, value: trimmedValue });
+      seen.add(key);
+    };
+
+    if (avasam?.SKU) {
+      addEntry("Product code", avasam.SKU);
+    }
+
+    if (avasam?.Category) {
+      addEntry("Category", avasam.Category);
+    }
+
+    if (typeof avasam?.ProductWeight === "number") {
+      const weight = formatMeasurement(avasam.ProductWeight);
+      if (weight) addEntry("Weight", `${weight} kg`);
+    }
+
+    const width = typeof avasam?.ProductWidth === "number" ? formatMeasurement(avasam.ProductWidth) : null;
+    const depth = typeof avasam?.ProductDepth === "number" ? formatMeasurement(avasam.ProductDepth) : null;
+    const height = typeof avasam?.ProductHeight === "number" ? formatMeasurement(avasam.ProductHeight) : null;
+
+    if (width || depth || height) {
+      const dimensionParts = [width && `${width}cm`, depth && `${depth}cm`, height && `${height}cm`].filter(Boolean);
+      if (dimensionParts.length > 0) {
+        const dimensionLabel = [width, depth, height].filter(Boolean).length === 3 ? "Dimensions (W × D × H)" : "Dimensions";
+        addEntry(dimensionLabel, dimensionParts.join(" × "));
+      }
+    }
+
+    (avasam?.ExtendedProperties ?? []).forEach((prop) => {
+      const rawName = typeof prop?.Name === "string" ? prop.Name : "";
+      const rawValue = typeof prop?.Value === "string" ? prop.Value : "";
+      const nameLower = rawName.toLowerCase();
+      const valueLower = rawValue.toLowerCase();
+      const shouldExclude = SPEC_EXCLUDE_KEYWORDS.some((keyword) =>
+        nameLower.includes(keyword) || valueLower.includes(keyword),
+      );
+      if (shouldExclude) return;
+      if (!rawValue.trim()) return;
+      addEntry(rawName || "Detail", rawValue);
+    });
+
+    return entries;
+  }, [avasam?.Category, avasam?.ExtendedProperties, avasam?.ProductDepth, avasam?.ProductHeight, avasam?.ProductWeight, avasam?.ProductWidth, avasam?.SKU]);
 
   const variantsWithMeta = useMemo(() => {
     return variants
@@ -227,12 +300,12 @@ export function ProductClient({ product }: { product: SeasonalProduct }) {
 
   return (
     <div className="grid gap-8 lg:grid-cols-[minmax(0,_3fr)_minmax(0,_2fr)]">
-      <div className="space-y-4">
+      <div className="space-y-6">
         <Link
           href="/"
-          className="inline-flex items-center text-xs font-medium text-slate-500 hover:text-slate-800"
+          className="inline-flex items-center text-[11px] font-medium tracking-wide text-slate-500 transition hover:text-slate-800"
         >
-          ← Back to season
+          ← Back to collection
         </Link>
         <ImageGallery
           images={baseGalleryImages}
@@ -246,40 +319,48 @@ export function ProductClient({ product }: { product: SeasonalProduct }) {
         />
       </div>
 
-      <div className="space-y-4 rounded-3xl bg-white p-6 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-          Seasonal pick
-        </p>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+      <div className="space-y-6 rounded-3xl bg-white p-8 shadow-sm">
+        <div className="space-y-2">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.3em] text-amber-600">
+            Limited season
+          </span>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
           {product.name || avasam?.Title}
-        </h1>
-        <div className="space-y-3 text-sm text-slate-600">
-          {product.description && <p>{product.description}</p>}
-          {!product.description && avasam?.Description && <p>{avasam.Description}</p>}
+          </h1>
+        </div>
+
+        <div className="space-y-4 text-sm leading-6 text-slate-600">
+          {product.description && <p className="text-base text-slate-700">{product.description}</p>}
+          {!product.description && avasam?.Description && (
+            <p className="text-base text-slate-700">{avasam.Description}</p>
+          )}
           {avasam?.MultiDescription?.en && (
             <div
-              className="prose prose-sm max-w-none text-slate-700 [&_h2]:mt-4 [&_h2]:text-base [&_ul]:list-disc [&_ul]:pl-5"
+              className="prose prose-sm max-w-none text-slate-700 [&_h2]:mt-6 [&_h2]:text-lg [&_h2]:font-semibold [&_ul]:mt-2 [&_ul]:list-disc [&_ul]:pl-5"
               dangerouslySetInnerHTML={{ __html: avasam.MultiDescription.en }}
             />
           )}
         </div>
 
-        <div className="mt-4 space-y-3">
+        <div className="space-y-4">
           <div className="flex items-baseline gap-3">
             {displayPrice?.kind === "single" && (
-              <span className="text-2xl font-semibold text-slate-900">
+              <span className="text-3xl font-semibold text-slate-900">
                 £{displayPrice.value.toFixed(2)}
               </span>
             )}
             {displayPrice?.kind === "range" && (
-              <span className="text-2xl font-semibold text-slate-900">
+              <span className="text-3xl font-semibold text-slate-900">
                 £{displayPrice.min.toFixed(2)} – £{displayPrice.max.toFixed(2)}
               </span>
             )}
+            <span className="text-xs uppercase tracking-[0.25em] text-slate-400">
+              Vat & markup included
+            </span>
           </div>
           {variantsWithMeta.length > 0 && (
-            <div className="space-y-2 text-xs">
-              <p className="font-medium text-slate-700">Variant</p>
+            <div className="space-y-3">
+              <p className="text-sm font-medium text-slate-700">Choose a style</p>
               <div className="flex flex-wrap gap-2">
                 {variantsWithMeta.map(({ variant: v, index, primary, secondary, code, thumb }) => {
                   const isActive = index === selectedVariantIndex;
@@ -312,7 +393,7 @@ export function ProductClient({ product }: { product: SeasonalProduct }) {
                         </span>
                       )}
                       <span className="text-left leading-tight">
-                        <span className="font-semibold">{primary}</span>
+                        <span className="text-sm font-semibold text-slate-900">{primary}</span>
                         {(secondary || (code && !primary.toUpperCase().includes(code.toUpperCase()))) && (
                           <span className="block text-[10px] font-normal opacity-80">
                             {[secondary, code && !primary.toUpperCase().includes(code.toUpperCase())
@@ -331,28 +412,25 @@ export function ProductClient({ product }: { product: SeasonalProduct }) {
           )}
         </div>
 
-        <div className="mt-4 space-y-1 text-xs text-slate-500">
-          {avasam?.SKU && <p>SKU: {avasam.SKU}</p>}
-          {avasam?.Category && <p>Category: {avasam.Category}</p>}
-          {avasam?.ProductWeight && <p>Weight: {avasam.ProductWeight} kg</p>}
-          {avasam?.ExtendedProperties && avasam.ExtendedProperties.length > 0 && (
-            <div className="pt-2">
-              <p className="mb-1 font-semibold text-slate-600">Product details</p>
-              <ul className="space-y-0.5 text-[11px] text-slate-500">
-                {avasam.ExtendedProperties.map((prop) => (
-                  <li key={`${prop.Name}-${prop.Value}`}>
-                    <span className="font-medium">{prop.Name}:</span> {" "}
-                    {prop.Value}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-
-        <div className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-xs text-slate-600">
-          Checkout and shipping flows will be added next. For now, this page
-          shows full product details enriched from Avasam.
+        {specItems.length > 0 && (
+          <div className="space-y-4">
+            <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">
+              Specifications
+            </h2>
+            <dl className="grid gap-3 text-sm text-slate-600 md:grid-cols-2">
+              {specItems.map((spec) => (
+                <div key={`${spec.label}-${spec.value}`} className="rounded-xl border border-slate-100 p-3">
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    {spec.label}
+                  </dt>
+                  <dd className="mt-1 text-sm text-slate-700">{spec.value}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        )}
+        <div className="rounded-2xl border border-slate-200/60 bg-slate-50 p-4 text-sm text-slate-600">
+          Free UK delivery over £35 · Easy seasonal returns within 30 days
         </div>
       </div>
     </div>

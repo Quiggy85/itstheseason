@@ -21,6 +21,9 @@ export type AvasamProduct = {
   ProductImage?: string[];
   Category?: string;
   ProductWeight?: number;
+  ProductWidth?: number;
+  ProductHeight?: number;
+  ProductDepth?: number;
   ExtendedProperties?: { Name: string; Value: string }[];
   Variations?: any[];
   MultiTitle?: { en?: string };
