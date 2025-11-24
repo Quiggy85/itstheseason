@@ -77,12 +77,10 @@ export async function getProductsBySkus(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      // Common patterns used by APIs that issue tokens
-      Authorization: `Bearer ${authKey}`,
-      Token: authKey,
+      // Per Avasam docs and Postman test: raw token in Authorization header
+      Authorization: authKey,
     },
     body: JSON.stringify({
-      Authkey: authKey,
       Page: 0,
       Limit: skus.length,
     }),
