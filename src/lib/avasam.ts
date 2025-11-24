@@ -77,6 +77,9 @@ export async function getProductsBySkus(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      // Common patterns used by APIs that issue tokens
+      Authorization: `Bearer ${authKey}`,
+      Token: authKey,
     },
     body: JSON.stringify({
       Authkey: authKey,
