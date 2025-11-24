@@ -73,12 +73,7 @@ export default async function ProductPage({
           )}
         </div>
 
-        <div className="mt-4 space-y-2">
-          <div className="flex items-baseline gap-3">
-            <span className="text-2xl font-semibold text-slate-900">
-              £{product.price_with_markup?.toFixed(2) ?? "-"}
-            </span>
-          </div>
+        <div className="mt-4">
           <VariantSelector avasam={product.avasam} />
         </div>
 

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useMemo, useState } from "react";
 import type { AvasamProduct } from "@/lib/avasam";
 
@@ -9,7 +10,6 @@ type Variant = NonNullable<AvasamProduct["Variations"]>[number];
 
 type Props = {
   avasam: AvasamProduct | null;
-  onVariantChange?: (variant: Variant | null, priceWithMarkup: number | null) => void;
 };
 
 function computeVariantPriceWithMarkup(parent: AvasamProduct | null, variant: Variant | null) {
@@ -26,7 +26,7 @@ function computeVariantPriceWithMarkup(parent: AvasamProduct | null, variant: Va
   return Math.round(baseIncVat * (1 + MARKUP_PERCENT / 100) * 100) / 100;
 }
 
-export function VariantSelector({ avasam, onVariantChange }: Props) {
+export function VariantSelector({ avasam }: Props) {
   const variants = useMemo(() => avasam?.Variations ?? [], [avasam]);
 
   const [activeIndex, setActiveIndex] = useState(() =>
@@ -47,17 +47,20 @@ export function VariantSelector({ avasam, onVariantChange }: Props) {
     return null;
   }
 
-  if (onVariantChange) {
-    onVariantChange(activeVariant, priceWithMarkup);
-  }
-
   const label = (v: Variant) => {
     const colour = (v.Attributes && (v.Attributes as any).Colour) || v.color;
     return colour || v.SKU;
   };
 
   return (
-    <div className="space-y-2 text-xs">
+    <div className="space-y-3 text-xs">
+      <div className="flex items-baseline gap-3">
+        {priceWithMarkup != null && (
+          <span className="text-2xl font-semibold text-slate-900">
+            £{priceWithMarkup.toFixed(2)}
+          </span>
+        )}
+      </div>
       <p className="font-medium text-slate-700">Variant</p>
       <div className="flex flex-wrap gap-2">
         {variants.map((v, idx) => {
@@ -67,22 +70,28 @@ export function VariantSelector({ avasam, onVariantChange }: Props) {
               key={v.SKU}
               type="button"
               onClick={() => setActiveIndex(idx)}
-              className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+              className={`flex items-center gap-2 rounded-full border px-2 py-1 text-xs font-medium transition ${
                 isActive
                   ? "border-slate-900 bg-slate-900 text-white"
                   : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
               }`}
             >
-              {label(v)}
+              {v.MainImage && (
+                <span className="relative h-7 w-7 overflow-hidden rounded-full bg-slate-100">
+                  <Image
+                    src={v.MainImage}
+                    alt={label(v)}
+                    fill
+                    sizes="32px"
+                    className="object-cover"
+                  />
+                </span>
+              )}
+              <span>{label(v)}</span>
             </button>
           );
         })}
       </div>
-      {priceWithMarkup != null && (
-        <p className="pt-1 text-[11px] text-slate-500">
-          Selected variant price: £{priceWithMarkup.toFixed(2)}
-        </p>
-      )}
     </div>
   );
 }
