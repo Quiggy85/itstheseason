@@ -119,7 +119,12 @@ export async function getProductsBySkus(
     return [];
   }
 
-  console.log("Avasam GetSellerProductList returned", data.length, "items");
+  console.log(
+    "Avasam GetSellerProductList returned",
+    data.length,
+    "items. SKUs:",
+    data.map((p: any) => p.SKU),
+  );
 
   const skuSet = new Set(skus);
 
