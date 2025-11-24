@@ -2,48 +2,16 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { createSupabaseServerClient } from "@/lib/supabaseServer";
-import { getProductsBySkus } from "@/lib/avasam";
-
-async function getProduct(id: string) {
-  const supabase = createSupabaseServerClient();
-
-  const { data, error } = await supabase
-    .from("products")
-    .select(
-      "id, avasam_sku, name, description, image_url, retail_price, currency",
-    )
-    .eq("id", id)
-    .maybeSingle();
-
-  if (error || !data) {
-    return null;
-  }
-
-  const avasamSku = data.avasam_sku as string | null;
-
-  const avasamProducts = avasamSku
-    ? await getProductsBySkus([avasamSku])
-    : [];
-
-  const avasam = avasamProducts[0] ?? null;
-
-  const basePrice = avasam?.Price ?? data.retail_price ?? null;
-  const markupPercent = Number(process.env.PRICE_MARKUP_PERCENT ?? 20);
-  const priceWithMarkup =
-    basePrice != null
-      ? Math.round(basePrice * (1 + markupPercent / 100) * 100) / 100
-      : null;
-
-  return { ...data, avasam, priceWithMarkup };
-}
+import { getProductsForCurrentSeason } from "@/lib/products";
 
 export default async function ProductPage({
   params,
 }: {
   params: { id: string };
 }) {
-  const product = await getProduct(params.id);
+  const { products } = await getProductsForCurrentSeason();
+
+  const product = products.find((p) => p.id === params.id) ?? null;
 
   if (!product) {
     notFound();
@@ -87,9 +55,9 @@ export default async function ProductPage({
         </p>
 
         <div className="mt-4 flex items-baseline gap-3">
-          {product.priceWithMarkup != null && (
+          {product.price_with_markup != null && (
             <span className="text-2xl font-semibold text-slate-900">
-              £{product.priceWithMarkup.toFixed(2)}
+              £{product.price_with_markup.toFixed(2)}
             </span>
           )}
           {product.avasam?.Price != null && (
