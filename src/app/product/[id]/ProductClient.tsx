@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo, useState } from "react";
 
 import type { SeasonalProduct } from "@/lib/products";
 import { ImageGallery } from "./ImageGallery";
@@ -26,7 +27,7 @@ export function ProductClient({ product }: { product: SeasonalProduct }) {
   const avasam = product.avasam ?? null;
   const variants = (avasam?.Variations as any[]) ?? [];
 
-  const [activeIndex, setActiveIndex] = React.useState(() => {
+  const [activeIndex, setActiveIndex] = useState(() => {
     const selected = variants.findIndex((v) => v.IsSelected);
     return selected >= 0 ? selected : 0;
   });
