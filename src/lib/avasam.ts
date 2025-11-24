@@ -16,6 +16,7 @@ export type AvasamProduct = {
   Image?: string;
   ProductImage?: string[];
   Category?: string;
+  ProductWeight?: number;
 };
 
 let cachedToken: { token: string; expiresAt: number } | null = null;

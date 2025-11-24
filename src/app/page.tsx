@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import { getProductsForCurrentSeason } from "@/lib/products";
 
 export default async function Home() {
@@ -84,8 +85,9 @@ export default async function Home() {
               const price = product.price_with_markup ?? product.avasam?.Price;
 
               return (
-                <article
+                <Link
                   key={product.id}
+                  href={`/product/${product.id}`}
                   className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:border-slate-300 hover:shadow-md"
                 >
                   <div className="relative h-48 w-full overflow-hidden bg-slate-100">
@@ -125,7 +127,7 @@ export default async function Home() {
                       </span>
                     </div>
                   </div>
-                </article>
+                </Link>
               );
             })}
           </div>
