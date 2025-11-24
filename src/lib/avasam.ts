@@ -4,6 +4,8 @@ const AVASAM_AUTH_URL =
   process.env.AVASAM_API_AUTH_URL ?? "https://app.avasam.com/api/auth";
 const AVASAM_CONSUMER_KEY = process.env.AVASAM_API_CONSUMER_KEY;
 const AVASAM_CONSUMER_SECRET = process.env.AVASAM_API_CONSUMER_SECRET;
+// Optional: if you paste a long-lived token here, it will be used directly
+const AVASAM_FIXED_TOKEN = process.env.AVASAM_API_FIXED_TOKEN;
 
 export type AvasamProduct = {
   SKU: string;
@@ -19,8 +21,15 @@ export type AvasamProduct = {
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
 async function getAuthKey(): Promise<string> {
+  // If user has configured a fixed token, prefer that
+  if (AVASAM_FIXED_TOKEN) {
+    console.log("Avasam using fixed token from env");
+    return AVASAM_FIXED_TOKEN;
+  }
+
   // Reuse token if it hasn't expired yet
   if (cachedToken && cachedToken.expiresAt > Date.now() + 30_000) {
+    console.log("Avasam using cached token");
     return cachedToken.token;
   }
 
@@ -42,6 +51,8 @@ async function getAuthKey(): Promise<string> {
   });
 
   if (!res.ok) {
+    const body = await res.text().catch(() => "<no body>");
+    console.error("Avasam request-token error", res.status, body);
     throw new Error(`Failed to authenticate with Avasam: ${res.status}`);
   }
 
@@ -63,6 +74,14 @@ async function getAuthKey(): Promise<string> {
 
   cachedToken = { token: data.access_token, expiresAt };
 
+  console.log(
+    "Avasam obtained new token",
+    {
+      tokenPreview: data.access_token.slice(0, 8),
+      expiresAt: new Date(expiresAt).toISOString(),
+    },
+  );
+
   return data.access_token;
 }
 
@@ -82,7 +101,8 @@ export async function getProductsBySkus(
     },
     body: JSON.stringify({
       Page: 0,
-      Limit: skus.length,
+      // Fetch a generous slice of inventory so we can match requested SKUs locally
+      Limit: 200,
     }),
   });
 
@@ -98,6 +118,8 @@ export async function getProductsBySkus(
     console.warn("Unexpected Avasam product list response shape", data);
     return [];
   }
+
+  console.log("Avasam GetSellerProductList returned", data.length, "items");
 
   const skuSet = new Set(skus);
 
