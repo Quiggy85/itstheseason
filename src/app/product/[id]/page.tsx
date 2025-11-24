@@ -49,6 +49,27 @@ export default async function ProductPage({
             className="object-cover"
           />
         </div>
+        {product.avasam?.ProductImage &&
+          product.avasam.ProductImage.length > 1 && (
+            <div className="grid grid-cols-4 gap-2">
+              {product.avasam.ProductImage.map((img, idx) => (
+                <div
+                  key={img + idx}
+                  className="relative aspect-square overflow-hidden rounded-xl bg-slate-100"
+                >
+                  <Image
+                    src={img}
+                    alt={`${product.name || product.avasam?.Title || "Product"} thumbnail ${
+                      idx + 1
+                    }`}
+                    fill
+                    sizes="96px"
+                    className="object-cover"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
       </div>
 
       <div className="space-y-4 rounded-3xl bg-white p-6 shadow-sm">
