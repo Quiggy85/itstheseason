@@ -29,24 +29,6 @@ function computeVariantPriceWithMarkup(parent: AvasamProduct | null, variant: an
   return Math.round(baseIncVat * (1 + MARKUP_PERCENT / 100) * 100) / 100;
 }
 
-const SPEC_EXCLUDE_KEYWORDS = ["wholesale", "dropship", "supplier", "dispatch", "lead time"];
-
-function formatSpecLabel(label: string) {
-  return label
-    .replace(/[_-]+/g, " ")
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
-function formatMeasurement(value: number) {
-  if (!Number.isFinite(value)) return null;
-  const abs = Math.abs(value);
-  const formatted = abs >= 10 ? value.toFixed(0) : value.toFixed(1);
-  return formatted.replace(/\.0$/, "");
-}
-
 export function ProductClient({ product }: { product: SeasonalProduct }) {
   const avasam = product.avasam ?? null;
   const variants = useMemo(() => (avasam?.Variations as any[]) ?? [], [avasam]);
@@ -130,60 +112,11 @@ export function ProductClient({ product }: { product: SeasonalProduct }) {
     return null;
   }, [avasam, product.price_with_markup, selectedVariant, variants]);
 
-  const specItems = useMemo(() => {
-    const entries: { label: string; value: string }[] = [];
-    const seen = new Set<string>();
-    const addEntry = (label: string, value: string | null | undefined) => {
-      const formattedLabel = formatSpecLabel(label);
-      if (!value) return;
-      const trimmedValue = value.toString().trim();
-      if (!trimmedValue) return;
-      const key = formattedLabel.toLowerCase();
-      if (seen.has(key)) return;
-      entries.push({ label: formattedLabel, value: trimmedValue });
-      seen.add(key);
-    };
-
-    if (avasam?.SKU) {
-      addEntry("Product code", avasam.SKU);
-    }
-
-    if (avasam?.Category) {
-      addEntry("Category", avasam.Category);
-    }
-
-    if (typeof avasam?.ProductWeight === "number") {
-      const weight = formatMeasurement(avasam.ProductWeight);
-      if (weight) addEntry("Weight", `${weight} kg`);
-    }
-
-    const width = typeof avasam?.ProductWidth === "number" ? formatMeasurement(avasam.ProductWidth) : null;
-    const depth = typeof avasam?.ProductDepth === "number" ? formatMeasurement(avasam.ProductDepth) : null;
-    const height = typeof avasam?.ProductHeight === "number" ? formatMeasurement(avasam.ProductHeight) : null;
-
-    if (width || depth || height) {
-      const dimensionParts = [width && `${width}cm`, depth && `${depth}cm`, height && `${height}cm`].filter(Boolean);
-      if (dimensionParts.length > 0) {
-        const dimensionLabel = [width, depth, height].filter(Boolean).length === 3 ? "Dimensions (W × D × H)" : "Dimensions";
-        addEntry(dimensionLabel, dimensionParts.join(" × "));
-      }
-    }
-
-    (avasam?.ExtendedProperties ?? []).forEach((prop) => {
-      const rawName = typeof prop?.Name === "string" ? prop.Name : "";
-      const rawValue = typeof prop?.Value === "string" ? prop.Value : "";
-      const nameLower = rawName.toLowerCase();
-      const valueLower = rawValue.toLowerCase();
-      const shouldExclude = SPEC_EXCLUDE_KEYWORDS.some((keyword) =>
-        nameLower.includes(keyword) || valueLower.includes(keyword),
-      );
-      if (shouldExclude) return;
-      if (!rawValue.trim()) return;
-      addEntry(rawName || "Detail", rawValue);
-    });
-
-    return entries;
-  }, [avasam?.Category, avasam?.ExtendedProperties, avasam?.ProductDepth, avasam?.ProductHeight, avasam?.ProductWeight, avasam?.ProductWidth, avasam?.SKU]);
+  const cleanedRichDescription = useMemo(() => {
+    const rawHtml = avasam?.MultiDescription?.en;
+    if (!rawHtml) return null;
+    return rawHtml.replace(/Imported from Avasam inventory/gi, "").replace(/<p>\s*<\/p>/gi, "");
+  }, [avasam?.MultiDescription?.en]);
 
   const variantsWithMeta = useMemo(() => {
     return variants
@@ -329,16 +262,16 @@ export function ProductClient({ product }: { product: SeasonalProduct }) {
           </h1>
         </div>
 
-        <div className="space-y-4 text-sm leading-6 text-slate-600">
-          {product.description && <p className="text-base text-slate-700">{product.description}</p>}
-          {!product.description && avasam?.Description && (
-            <p className="text-base text-slate-700">{avasam.Description}</p>
+        <div className="flex items-baseline gap-3">
+          {displayPrice?.kind === "single" && (
+            <span className="text-3xl font-semibold text-slate-900">
+              £{displayPrice.value.toFixed(2)}
+            </span>
           )}
-          {avasam?.MultiDescription?.en && (
-            <div
-              className="prose prose-sm max-w-none text-slate-700 [&_h2]:mt-6 [&_h2]:text-lg [&_h2]:font-semibold [&_ul]:mt-2 [&_ul]:list-disc [&_ul]:pl-5"
-              dangerouslySetInnerHTML={{ __html: avasam.MultiDescription.en }}
-            />
+          {displayPrice?.kind === "range" && (
+            <span className="text-3xl font-semibold text-slate-900">
+              £{displayPrice.min.toFixed(2)} – £{displayPrice.max.toFixed(2)}
+            </span>
           )}
         </div>
 
@@ -377,9 +310,19 @@ export function ProductClient({ product }: { product: SeasonalProduct }) {
                       </span>
                     )}
                     <span className="text-left leading-tight">
-                      <span className="text-sm font-semibold text-slate-900">{primary}</span>
+                      <span
+                        className={`text-sm font-semibold ${
+                          isActive ? "text-white" : "text-slate-900"
+                        }`}
+                      >
+                        {primary}
+                      </span>
                       {(secondary || (code && !primary.toUpperCase().includes(code.toUpperCase()))) && (
-                        <span className="block text-[10px] font-normal opacity-80">
+                        <span
+                          className={`block text-[10px] font-normal opacity-80 ${
+                            isActive ? "text-white/80" : ""
+                          }`}
+                        >
                           {[secondary, code && !primary.toUpperCase().includes(code.toUpperCase())
                             ? `Colour ${code.toUpperCase()}`
                             : null]
@@ -395,38 +338,19 @@ export function ProductClient({ product }: { product: SeasonalProduct }) {
           </div>
         )}
 
-        <div className="space-y-4">
-          <div className="flex items-baseline gap-3">
-            {displayPrice?.kind === "single" && (
-              <span className="text-3xl font-semibold text-slate-900">
-                £{displayPrice.value.toFixed(2)}
-              </span>
-            )}
-            {displayPrice?.kind === "range" && (
-              <span className="text-3xl font-semibold text-slate-900">
-                £{displayPrice.min.toFixed(2)} – £{displayPrice.max.toFixed(2)}
-              </span>
-            )}
-          </div>
-
-          {specItems.length > 0 && (
-            <div className="space-y-4">
-              <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">
-                Specifications
-              </h2>
-              <dl className="grid gap-3 text-sm text-slate-600 md:grid-cols-2">
-                {specItems.map((spec) => (
-                  <div key={`${spec.label}-${spec.value}`} className="rounded-xl border border-slate-100 p-3">
-                    <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                      {spec.label}
-                    </dt>
-                    <dd className="mt-1 text-sm text-slate-700">{spec.value}</dd>
-                  </div>
-                ))}
-              </dl>
-            </div>
+        <div className="space-y-4 text-sm leading-6 text-slate-600">
+          {product.description && <p className="text-base text-slate-700">{product.description}</p>}
+          {!product.description && avasam?.Description && (
+            <p className="text-base text-slate-700">{avasam.Description}</p>
+          )}
+          {cleanedRichDescription && (
+            <div
+              className="prose prose-sm max-w-none text-slate-700 [&_h2]:mt-6 [&_h2]:text-lg [&_h2]:font-semibold [&_ul]:mt-2 [&_ul]:list-disc [&_ul]:pl-5"
+              dangerouslySetInnerHTML={{ __html: cleanedRichDescription }}
+            />
           )}
         </div>
+
         <div className="rounded-2xl border border-slate-200/60 bg-slate-50 p-4 text-sm text-slate-600">
           Free UK delivery over £35 · Easy seasonal returns within 30 days
         </div>
