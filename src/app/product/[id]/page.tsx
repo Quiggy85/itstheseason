@@ -7,19 +7,15 @@ import { getProductsForCurrentSeason } from "@/lib/products";
 export default async function ProductPage({
   params,
 }: {
-  params: { id: string };
+  // In React 19/Next 16, params is a Promise in server components
+  params: Promise<{ id: string }>;
 }) {
+  const resolvedParams = await params;
+
   const { products } = await getProductsForCurrentSeason();
 
-  const paramId =
-    // Prefer explicit id
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (params as any).id ??
-    // Fallback: first value in params object if key name differs
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    Object.values(params as any)[0];
+  const paramId = resolvedParams.id;
 
-  console.log("ProductPage params", params);
   console.log("ProductPage resolved paramId", paramId);
   console.log("ProductPage product ids", products.map((p) => p.id));
 
