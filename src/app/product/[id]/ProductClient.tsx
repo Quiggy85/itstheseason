@@ -135,6 +135,16 @@ export function ProductClient({ product }: { product: SeasonalProduct }) {
       .trim();
   }, [avasam?.MultiDescription?.en]);
 
+  const displayTitle = useMemo(() => {
+    const candidate =
+      product.name && product.name.trim().length > 0
+        ? product.name
+        : avasam?.MultiTitle?.en && avasam.MultiTitle.en.trim().length > 0
+          ? avasam.MultiTitle.en
+          : avasam?.Title ?? "";
+    return candidate.replace(/\s*\.\.\.$/, "").trim();
+  }, [avasam?.MultiTitle?.en, avasam?.Title, product.name]);
+
   const variantsWithMeta = useMemo(() => {
     return variants
       .map((variant, index) => {
@@ -275,7 +285,7 @@ export function ProductClient({ product }: { product: SeasonalProduct }) {
             Limited season
           </span>
           <h1 className="text-3xl font-semibold tracking-tight text-slate-900 whitespace-normal break-words">
-          {product.name || avasam?.Title}
+            {displayTitle}
           </h1>
         </div>
 
