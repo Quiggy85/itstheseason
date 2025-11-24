@@ -91,7 +91,7 @@ export async function getProductsBySkus(
   if (!res.ok) {
     const body = await res.text().catch(() => "<no body>");
     console.error("Avasam GetSellerProductList error", res.status, body);
-    throw new Error(`Failed to fetch products from Avasam: ${res.status}`);
+    return [];
   }
 
   const data = await res.json();
