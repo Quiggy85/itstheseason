@@ -29,6 +29,8 @@ function computeVariantPriceWithMarkup(parent: AvasamProduct | null, variant: an
   return Math.round(baseIncVat * (1 + MARKUP_PERCENT / 100) * 100) / 100;
 }
 
+const SUPPLIER_COPY_REGEX = /Imported from Avasam inventory/gi;
+
 export function ProductClient({ product }: { product: SeasonalProduct }) {
   const avasam = product.avasam ?? null;
   const variants = useMemo(() => (avasam?.Variations as any[]) ?? [], [avasam]);
@@ -112,10 +114,25 @@ export function ProductClient({ product }: { product: SeasonalProduct }) {
     return null;
   }, [avasam, product.price_with_markup, selectedVariant, variants]);
 
+  const sanitizedDescription = useMemo(() => {
+    if (!product.description) return null;
+    const cleaned = product.description.replace(SUPPLIER_COPY_REGEX, "").trim();
+    return cleaned.length > 0 ? cleaned : null;
+  }, [product.description]);
+
+  const sanitizedAvasamDescription = useMemo(() => {
+    if (!avasam?.Description) return null;
+    const cleaned = avasam.Description.replace(SUPPLIER_COPY_REGEX, "").trim();
+    return cleaned.length > 0 ? cleaned : null;
+  }, [avasam?.Description]);
+
   const cleanedRichDescription = useMemo(() => {
     const rawHtml = avasam?.MultiDescription?.en;
     if (!rawHtml) return null;
-    return rawHtml.replace(/Imported from Avasam inventory/gi, "").replace(/<p>\s*<\/p>/gi, "");
+    return rawHtml
+      .replace(SUPPLIER_COPY_REGEX, "")
+      .replace(/<p>\s*<\/p>/gi, "")
+      .trim();
   }, [avasam?.MultiDescription?.en]);
 
   const variantsWithMeta = useMemo(() => {
@@ -257,7 +274,7 @@ export function ProductClient({ product }: { product: SeasonalProduct }) {
           <span className="text-[11px] font-semibold uppercase tracking-[0.3em] text-amber-600">
             Limited season
           </span>
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-900 whitespace-normal break-words">
           {product.name || avasam?.Title}
           </h1>
         </div>
@@ -339,9 +356,9 @@ export function ProductClient({ product }: { product: SeasonalProduct }) {
         )}
 
         <div className="space-y-4 text-sm leading-6 text-slate-600">
-          {product.description && <p className="text-base text-slate-700">{product.description}</p>}
-          {!product.description && avasam?.Description && (
-            <p className="text-base text-slate-700">{avasam.Description}</p>
+          {sanitizedDescription && <p className="text-base text-slate-700">{sanitizedDescription}</p>}
+          {!sanitizedDescription && sanitizedAvasamDescription && (
+            <p className="text-base text-slate-700">{sanitizedAvasamDescription}</p>
           )}
           {cleanedRichDescription && (
             <div
