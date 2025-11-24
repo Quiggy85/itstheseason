@@ -11,12 +11,23 @@ export type AvasamProduct = {
   SKU: string;
   Price: number;
   RetailPrice?: number;
+  Vat?: number;
+  VATPercentage?: number;
+  PriceIncVat?: number;
+  RetailPriceIncVat?: number;
   Title: string;
   Description?: string;
   Image?: string;
   ProductImage?: string[];
   Category?: string;
   ProductWeight?: number;
+  ExtendedProperties?: { Name: string; Value: string }[];
+  Variations?: any[];
+  MultiTitle?: { en?: string };
+  MultiDescription?: { en?: string };
+  CategoryId?: string;
+  ProductType?: string;
+  VariationType?: string;
 };
 
 let cachedToken: { token: string; expiresAt: number } | null = null;

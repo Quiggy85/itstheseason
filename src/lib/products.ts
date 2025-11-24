@@ -56,7 +56,26 @@ export async function getProductsForCurrentSeason(): Promise<{
 
   const products: SeasonalProduct[] = flatProducts.map((p) => {
     const avasam = avasamBySku.get(p.avasam_sku) ?? null;
-    const basePrice = avasam?.Price ?? p.retail_price ?? null;
+    // Prefer VAT-inclusive cost from Avasam; fall back sensibly
+    let basePrice: number | null = null;
+
+    if (avasam) {
+      const vatPct =
+        avasam.VATPercentage ??
+        (typeof avasam.Vat === "number" ? avasam.Vat : undefined);
+
+      if (typeof avasam.PriceIncVat === "number") {
+        basePrice = avasam.PriceIncVat;
+      } else if (vatPct != null && typeof avasam.Price === "number") {
+        basePrice = avasam.Price * (1 + vatPct / 100);
+      } else if (typeof avasam.Price === "number") {
+        basePrice = avasam.Price;
+      }
+    }
+
+    if (basePrice == null && p.retail_price != null) {
+      basePrice = p.retail_price;
+    }
 
     const priceWithMarkup =
       basePrice != null

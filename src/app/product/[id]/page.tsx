@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { getProductsForCurrentSeason } from "@/lib/products";
 import { ImageGallery } from "./ImageGallery";
+import { VariantSelector } from "./VariantSelector";
 
 export default async function ProductPage({
   params,
@@ -57,28 +58,52 @@ export default async function ProductPage({
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
           {product.name || product.avasam?.Title}
         </h1>
-        <p className="text-sm text-slate-600">
-          {product.description || product.avasam?.Description}
-        </p>
-
-        <div className="mt-4 flex items-baseline gap-3">
-          {product.price_with_markup != null && (
-            <span className="text-2xl font-semibold text-slate-900">
-              £{product.price_with_markup.toFixed(2)}
-            </span>
+        <div className="space-y-3 text-sm text-slate-600">
+          {product.description && <p>{product.description}</p>}
+          {!product.description && product.avasam?.Description && (
+            <p>{product.avasam.Description}</p>
+          )}
+          {product.avasam?.MultiDescription?.en && (
+            <div
+              className="prose prose-sm max-w-none text-slate-700 [&_h2]:mt-4 [&_h2]:text-base [&_ul]:list-disc [&_ul]:pl-5"
+              dangerouslySetInnerHTML={{
+                __html: product.avasam.MultiDescription.en,
+              }}
+            />
           )}
         </div>
 
+        <div className="mt-4 space-y-2">
+          <div className="flex items-baseline gap-3">
+            <span className="text-2xl font-semibold text-slate-900">
+              £{product.price_with_markup?.toFixed(2) ?? "-"}
+            </span>
+          </div>
+          <VariantSelector avasam={product.avasam} />
+        </div>
+
         <div className="mt-4 space-y-1 text-xs text-slate-500">
-          {product.avasam?.SKU && (
-            <p>SKU: {product.avasam.SKU}</p>
-          )}
-          {product.avasam?.Category && (
-            <p>Category: {product.avasam.Category}</p>
-          )}
+          {product.avasam?.SKU && <p>SKU: {product.avasam.SKU}</p>}
+          {product.avasam?.Category && <p>Category: {product.avasam.Category}</p>}
           {product.avasam?.ProductWeight && (
             <p>Weight: {product.avasam.ProductWeight} kg</p>
           )}
+          {product.avasam?.ExtendedProperties &&
+            product.avasam.ExtendedProperties.length > 0 && (
+              <div className="pt-2">
+                <p className="mb-1 font-semibold text-slate-600">
+                  Product details
+                </p>
+                <ul className="space-y-0.5 text-[11px] text-slate-500">
+                  {product.avasam.ExtendedProperties.map((prop) => (
+                    <li key={`${prop.Name}-${prop.Value}`}>
+                      <span className="font-medium">{prop.Name}:</span> {" "}
+                      {prop.Value}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
         </div>
 
         <div className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-xs text-slate-600">
