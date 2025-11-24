@@ -6,12 +6,20 @@ import { useState } from "react";
 type Props = {
   images: string[];
   alt: string;
+  activeIndex?: number;
+  forcedImage?: string | null;
+  onSelect?: (index: number) => void;
 };
 
-export function ImageGallery({ images, alt }: Props) {
-  const [activeIndex, setActiveIndex] = useState(0);
+export function ImageGallery({ images, alt, activeIndex, forcedImage, onSelect }: Props) {
+  const [internalIndex, setInternalIndex] = useState(0);
 
-  const main = images[activeIndex] ?? images[0];
+  const currentIndex =
+    typeof activeIndex === "number" && activeIndex >= 0
+      ? activeIndex
+      : internalIndex;
+
+  const main = forcedImage ?? images[currentIndex] ?? images[0];
 
   return (
     <div className="space-y-4">
@@ -30,8 +38,18 @@ export function ImageGallery({ images, alt }: Props) {
             <button
               key={img + idx}
               type="button"
-              onClick={() => setActiveIndex(idx)}
-              className={`relative aspect-square overflow-hidden rounded-xl border bg-slate-100 transition ${idx === activeIndex ? "border-slate-900" : "border-transparent hover:border-slate-300"}`}
+              onClick={() => {
+                if (typeof onSelect === "function") {
+                  onSelect(idx);
+                } else {
+                  setInternalIndex(idx);
+                }
+              }}
+              className={`relative aspect-square overflow-hidden rounded-xl border bg-slate-100 transition ${
+                idx === currentIndex && !forcedImage
+                  ? "border-slate-900"
+                  : "border-transparent hover:border-slate-300"
+              }`}
             >
               <Image
                 src={img}

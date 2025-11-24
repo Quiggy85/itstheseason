@@ -1,11 +1,17 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import type { SeasonalProduct } from "@/lib/products";
 import { ImageGallery } from "./ImageGallery";
 import type { AvasamProduct } from "@/lib/avasam";
+
+type DisplayPrice =
+  | { kind: "single"; value: number }
+  | { kind: "range"; min: number; max: number }
+  | null;
 
 const MARKUP_PERCENT = Number(process.env.NEXT_PUBLIC_PRICE_MARKUP_PERCENT ?? 20);
 
@@ -25,33 +31,71 @@ function computeVariantPriceWithMarkup(parent: AvasamProduct | null, variant: an
 
 export function ProductClient({ product }: { product: SeasonalProduct }) {
   const avasam = product.avasam ?? null;
-  const variants = (avasam?.Variations as any[]) ?? [];
+  const variants = useMemo(() => (avasam?.Variations as any[]) ?? [], [avasam]);
 
-  const [activeIndex, setActiveIndex] = useState(() => {
-    const selected = variants.findIndex((v) => v.IsSelected);
-    return selected >= 0 ? selected : 0;
-  });
+  const [selectedVariantIndex, setSelectedVariantIndex] = useState<number | null>(null);
+  const [galleryIndex, setGalleryIndex] = useState(0);
 
-  const activeVariant = variants[activeIndex] ?? null;
+  const selectedVariant =
+    selectedVariantIndex != null && variants[selectedVariantIndex]
+      ? variants[selectedVariantIndex]
+      : null;
 
-  const galleryImages = (() => {
-    if (activeVariant && Array.isArray(activeVariant.Images) && activeVariant.Images.length > 0) {
-      return activeVariant.Images as string[];
-    }
-
+  const baseGalleryImages = useMemo(() => {
     if (avasam?.ProductImage && avasam.ProductImage.length > 0) {
       return avasam.ProductImage as string[];
     }
 
-    const fallback =
-      product.image_url || avasam?.Image || (activeVariant && activeVariant.MainImage) || "/placeholder.png";
+    if (product.image_url) {
+      return [product.image_url];
+    }
 
-    return [fallback];
-  })();
+    if (avasam?.Image) {
+      return [avasam.Image];
+    }
 
-  const variantPrice = computeVariantPriceWithMarkup(avasam, activeVariant);
-  const displayPrice =
-    variantPrice ?? product.price_with_markup ?? (avasam ? computeVariantPriceWithMarkup(avasam, null) : null);
+    return ["/placeholder.png"];
+  }, [avasam?.Image, avasam?.ProductImage, product.image_url]);
+
+  const forcedVariantImage = useMemo(() => {
+    if (!selectedVariant) return null;
+
+    if (Array.isArray(selectedVariant.Images) && selectedVariant.Images.length > 0) {
+      return selectedVariant.Images[0] as string;
+    }
+
+    if (selectedVariant.MainImage) {
+      return selectedVariant.MainImage as string;
+    }
+
+    return baseGalleryImages[0];
+  }, [selectedVariant, baseGalleryImages]);
+
+  const displayPrice: DisplayPrice = useMemo(() => {
+    if (selectedVariant) {
+      const price = computeVariantPriceWithMarkup(avasam, selectedVariant);
+      return price != null ? { kind: "single", value: price } : null;
+    }
+
+    const variantPrices = variants
+      .map((v) => computeVariantPriceWithMarkup(avasam, v))
+      .filter((p): p is number => typeof p === "number" && !Number.isNaN(p));
+
+    if (variantPrices.length > 0) {
+      const min = Math.min(...variantPrices);
+      const max = Math.max(...variantPrices);
+      if (Math.round(min * 100) === Math.round(max * 100)) {
+        return { kind: "single", value: min } as const;
+      }
+      return { kind: "range", min, max } as const;
+    }
+
+    if (typeof product.price_with_markup === "number") {
+      return { kind: "single", value: product.price_with_markup } as const;
+    }
+
+    return null;
+  }, [avasam, product.price_with_markup, selectedVariant, variants]);
 
   const variantLabel = (v: any) => {
     const colour = (v.Attributes && v.Attributes.Colour) || v.color;
@@ -68,8 +112,14 @@ export function ProductClient({ product }: { product: SeasonalProduct }) {
           ← Back to season
         </Link>
         <ImageGallery
-          images={galleryImages}
+          images={baseGalleryImages}
           alt={product.name || avasam?.Title || "Product"}
+          forcedImage={forcedVariantImage}
+          activeIndex={selectedVariant ? undefined : galleryIndex}
+          onSelect={(idx) => {
+            setSelectedVariantIndex(null);
+            setGalleryIndex(idx);
+          }}
         />
       </div>
 
@@ -93,9 +143,14 @@ export function ProductClient({ product }: { product: SeasonalProduct }) {
 
         <div className="mt-4 space-y-3">
           <div className="flex items-baseline gap-3">
-            {displayPrice != null && (
+            {displayPrice?.kind === "single" && (
               <span className="text-2xl font-semibold text-slate-900">
-                £{displayPrice.toFixed(2)}
+                £{displayPrice.value.toFixed(2)}
+              </span>
+            )}
+            {displayPrice?.kind === "range" && (
+              <span className="text-2xl font-semibold text-slate-900">
+                £{displayPrice.min.toFixed(2)} – £{displayPrice.max.toFixed(2)}
               </span>
             )}
           </div>
@@ -104,24 +159,36 @@ export function ProductClient({ product }: { product: SeasonalProduct }) {
               <p className="font-medium text-slate-700">Variant</p>
               <div className="flex flex-wrap gap-2">
                 {variants.map((v, idx) => {
-                  const isActive = idx === activeIndex;
+                  const isActive = idx === selectedVariantIndex;
+                  const thumb =
+                    v.MainImage ??
+                    (Array.isArray(v.Images) && v.Images.length > 0 ? (v.Images[0] as string) : null);
+
                   return (
                     <button
                       key={v.SKU}
                       type="button"
-                      onClick={() => setActiveIndex(idx)}
+                      onClick={() => {
+                        if (selectedVariantIndex === idx) {
+                          setSelectedVariantIndex(null);
+                        } else {
+                          setSelectedVariantIndex(idx);
+                        }
+                      }}
                       className={`flex items-center gap-2 rounded-full border px-2 py-1 text-xs font-medium transition ${
                         isActive
                           ? "border-slate-900 bg-slate-900 text-white"
                           : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
                       }`}
                     >
-                      {v.MainImage && (
+                      {thumb && (
                         <span className="relative h-7 w-7 overflow-hidden rounded-full bg-slate-100">
-                          <img
-                            src={v.MainImage}
+                          <Image
+                            src={thumb}
                             alt={variantLabel(v)}
-                            className="h-full w-full object-cover"
+                            fill
+                            sizes="32px"
+                            className="object-cover"
                           />
                         </span>
                       )}
