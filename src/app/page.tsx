@@ -116,11 +116,6 @@ export default async function Home() {
                             £{price.toFixed(2)}
                           </span>
                         )}
-                        {product.avasam?.Price != null && (
-                          <span className="text-xs text-slate-400">
-                            Base £{product.avasam.Price.toFixed(2)}
-                          </span>
-                        )}
                       </div>
                       <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-medium text-white">
                         View details

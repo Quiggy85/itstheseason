@@ -1,8 +1,8 @@
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { getProductsForCurrentSeason } from "@/lib/products";
+import { ImageGallery } from "./ImageGallery";
 
 export default async function ProductPage({
   params,
@@ -25,11 +25,15 @@ export default async function ProductPage({
     notFound();
   }
 
-  const imageSrc =
-    product.image_url ||
-    product.avasam?.Image ||
-    product.avasam?.ProductImage?.[0] ||
-    "/placeholder.png";
+  const galleryImages = (
+    product.avasam?.ProductImage && product.avasam.ProductImage.length > 0
+      ? product.avasam.ProductImage
+      : [
+          product.image_url ||
+            product.avasam?.Image ||
+            "/placeholder.png",
+        ]
+  ).filter(Boolean) as string[];
 
   return (
     <div className="grid gap-8 lg:grid-cols-[minmax(0,_3fr)_minmax(0,_2fr)]">
@@ -40,36 +44,10 @@ export default async function ProductPage({
         >
           ← Back to season
         </Link>
-        <div className="relative aspect-square w-full overflow-hidden rounded-3xl bg-slate-100">
-          <Image
-            src={imageSrc}
-            alt={product.name || product.avasam?.Title || "Product"}
-            fill
-            sizes="(min-width: 1024px) 50vw, 100vw"
-            className="object-cover"
-          />
-        </div>
-        {product.avasam?.ProductImage &&
-          product.avasam.ProductImage.length > 1 && (
-            <div className="grid grid-cols-4 gap-2">
-              {product.avasam.ProductImage.map((img, idx) => (
-                <div
-                  key={img + idx}
-                  className="relative aspect-square overflow-hidden rounded-xl bg-slate-100"
-                >
-                  <Image
-                    src={img}
-                    alt={`${product.name || product.avasam?.Title || "Product"} thumbnail ${
-                      idx + 1
-                    }`}
-                    fill
-                    sizes="96px"
-                    className="object-cover"
-                  />
-                </div>
-              ))}
-            </div>
-          )}
+        <ImageGallery
+          images={galleryImages}
+          alt={product.name || product.avasam?.Title || "Product"}
+        />
       </div>
 
       <div className="space-y-4 rounded-3xl bg-white p-6 shadow-sm">
@@ -87,11 +65,6 @@ export default async function ProductPage({
           {product.price_with_markup != null && (
             <span className="text-2xl font-semibold text-slate-900">
               £{product.price_with_markup.toFixed(2)}
-            </span>
-          )}
-          {product.avasam?.Price != null && (
-            <span className="text-xs text-slate-500">
-              Base £{product.avasam.Price.toFixed(2)}
             </span>
           )}
         </div>
