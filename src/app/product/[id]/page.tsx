@@ -11,10 +11,19 @@ export default async function ProductPage({
 }) {
   const { products } = await getProductsForCurrentSeason();
 
-  console.log("ProductPage params.id", params.id);
+  const paramId =
+    // Prefer explicit id
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (params as any).id ??
+    // Fallback: first value in params object if key name differs
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    Object.values(params as any)[0];
+
+  console.log("ProductPage params", params);
+  console.log("ProductPage resolved paramId", paramId);
   console.log("ProductPage product ids", products.map((p) => p.id));
 
-  const product = products.find((p) => p.id === params.id) ?? null;
+  const product = products.find((p) => p.id === paramId) ?? null;
 
   if (!product) {
     notFound();
