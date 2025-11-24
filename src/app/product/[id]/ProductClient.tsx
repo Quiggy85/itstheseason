@@ -33,6 +33,21 @@ export function ProductClient({ product }: { product: SeasonalProduct }) {
   const avasam = product.avasam ?? null;
   const variants = useMemo(() => (avasam?.Variations as any[]) ?? [], [avasam]);
 
+  const variantColourMap = useMemo(() => {
+    const map = new Map<string, string>();
+    if (Array.isArray(avasam?.ExtendedProperties)) {
+      avasam.ExtendedProperties.forEach((prop) => {
+        if (!prop || typeof prop.Value !== "string") return;
+        const name = prop.Name?.toString() ?? "";
+        const match = /colour\s+([A-Za-z0-9]+)/i.exec(name);
+        if (match && match[1]) {
+          map.set(match[1].toUpperCase(), prop.Value.trim());
+        }
+      });
+    }
+    return map;
+  }, [avasam?.ExtendedProperties]);
+
   const [selectedVariantIndex, setSelectedVariantIndex] = useState<number | null>(null);
   const [galleryIndex, setGalleryIndex] = useState(0);
 
@@ -98,9 +113,85 @@ export function ProductClient({ product }: { product: SeasonalProduct }) {
   }, [avasam, product.price_with_markup, selectedVariant, variants]);
 
   const variantLabel = (v: any) => {
-    const colour = (v.Attributes && v.Attributes.Colour) || v.color;
-    return colour || v.SKU;
+    const attributes = (v && typeof v === "object" && v.Attributes) || null;
+
+    const attrEntries = attributes && typeof attributes === "object"
+      ? Object.entries(attributes as Record<string, unknown>)
+      : [];
+
+    const codeCandidate = (() => {
+      const raw = attrEntries.find(([key]) => key.toLowerCase().includes("colour"))?.[1]
+        ?? (typeof v.color === "string" ? v.color : undefined)
+        ?? (typeof v.Colour === "string" ? v.Colour : undefined);
+      if (typeof raw === "string" && raw.trim()) {
+        return raw.trim();
+      }
+      return undefined;
+    })();
+
+    if (codeCandidate) {
+      const mapped = variantColourMap.get(codeCandidate.toUpperCase());
+      if (mapped) {
+        return { label: mapped, code: codeCandidate };
+      }
+    }
+
+    const colourNameFromAttributes = attrEntries
+      .filter(([key]) => key.toLowerCase().includes("colour") || key.toLowerCase().includes("color"))
+      .map(([, value]) => (typeof value === "string" ? value.trim() : ""))
+      .find((value) => value.length > 1 && !/^[A-Za-z]\d?$/u.test(value));
+
+    if (colourNameFromAttributes) {
+      return { label: colourNameFromAttributes, code: codeCandidate };
+    }
+
+    const otherAttrCandidate = attrEntries
+      .map(([, value]) => (typeof value === "string" ? value.trim() : ""))
+      .find((value) => value.length > 1 && !/^[A-Za-z]\d?$/u.test(value));
+
+    if (otherAttrCandidate) {
+      return { label: otherAttrCandidate, code: codeCandidate };
+    }
+
+    const topLevelCandidates = [
+      v.ColourName,
+      v.ColorName,
+      v.Name,
+      v.Label,
+    ].filter((value): value is string => typeof value === "string" && value.trim().length > 1);
+
+    if (topLevelCandidates[0]) {
+      return { label: topLevelCandidates[0].trim(), code: codeCandidate };
+    }
+
+    if (codeCandidate) {
+      return { label: `Colour ${codeCandidate.toUpperCase()}`, code: codeCandidate };
+    }
+
+    return { label: `Variant`, code: undefined };
   };
+
+  const variantsWithMeta = useMemo(() => {
+    return variants
+      .map((variant, index) => {
+        const meta = variantLabel(variant);
+        const thumb =
+          variant.MainImage ??
+          (Array.isArray(variant.Images) && variant.Images.length > 0
+            ? (variant.Images[0] as string)
+            : null);
+
+        return {
+          variant,
+          index,
+          label: meta.label,
+          code: meta.code,
+          thumb,
+          sortKey: meta.label.toLowerCase(),
+        };
+      })
+      .sort((a, b) => a.sortKey.localeCompare(b.sortKey, undefined, { sensitivity: "base" }));
+  }, [variants, variantLabel]);
 
   return (
     <div className="grid gap-8 lg:grid-cols-[minmax(0,_3fr)_minmax(0,_2fr)]">
@@ -154,25 +245,21 @@ export function ProductClient({ product }: { product: SeasonalProduct }) {
               </span>
             )}
           </div>
-          {variants.length > 0 && (
+          {variantsWithMeta.length > 0 && (
             <div className="space-y-2 text-xs">
               <p className="font-medium text-slate-700">Variant</p>
               <div className="flex flex-wrap gap-2">
-                {variants.map((v, idx) => {
-                  const isActive = idx === selectedVariantIndex;
-                  const thumb =
-                    v.MainImage ??
-                    (Array.isArray(v.Images) && v.Images.length > 0 ? (v.Images[0] as string) : null);
-
+                {variantsWithMeta.map(({ variant: v, index, label, code, thumb }) => {
+                  const isActive = index === selectedVariantIndex;
                   return (
                     <button
                       key={v.SKU}
                       type="button"
                       onClick={() => {
-                        if (selectedVariantIndex === idx) {
+                        if (selectedVariantIndex === index) {
                           setSelectedVariantIndex(null);
                         } else {
-                          setSelectedVariantIndex(idx);
+                          setSelectedVariantIndex(index);
                         }
                       }}
                       className={`flex items-center gap-2 rounded-full border px-2 py-1 text-xs font-medium transition ${
@@ -185,14 +272,19 @@ export function ProductClient({ product }: { product: SeasonalProduct }) {
                         <span className="relative h-7 w-7 overflow-hidden rounded-full bg-slate-100">
                           <Image
                             src={thumb}
-                            alt={variantLabel(v)}
+                            alt={label}
                             fill
                             sizes="32px"
                             className="object-cover"
                           />
                         </span>
                       )}
-                      <span>{variantLabel(v)}</span>
+                      <span>
+                        {label}
+                        {code && !label.toUpperCase().includes(code.toUpperCase()) && (
+                          <span className="ml-1 text-[10px] opacity-80">({code.toUpperCase()})</span>
+                        )}
+                      </span>
                     </button>
                   );
                 })}
