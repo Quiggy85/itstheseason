@@ -11,6 +11,9 @@ export default async function ProductPage({
 }) {
   const { products } = await getProductsForCurrentSeason();
 
+  console.log("ProductPage params.id", params.id);
+  console.log("ProductPage product ids", products.map((p) => p.id));
+
   const product = products.find((p) => p.id === params.id) ?? null;
 
   if (!product) {
