@@ -2,6 +2,47 @@ import Image from "next/image";
 import Link from "next/link";
 import { getProductsForCurrentSeason } from "@/lib/products";
 
+function formatCurrency(amount: number, currency?: string | null): string {
+  const normalizedCurrency = currency?.toUpperCase() ?? "GBP";
+
+  try {
+    return new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency: normalizedCurrency,
+      minimumFractionDigits: 2,
+    }).format(amount);
+  } catch (error) {
+    console.warn("Unable to format currency", normalizedCurrency, error);
+    return `£${amount.toFixed(2)}`;
+  }
+}
+
+function formatDayLabel(days: number): string {
+  return days === 1 ? "1 day" : `${days} days`;
+}
+
+function formatDeliveryWindow(
+  minDays: number | null | undefined,
+  maxDays: number | null | undefined,
+): string | null {
+  if (minDays != null && maxDays != null) {
+    if (minDays === maxDays) {
+      return formatDayLabel(minDays);
+    }
+    return `${formatDayLabel(minDays)} – ${formatDayLabel(maxDays)}`;
+  }
+
+  if (minDays != null) {
+    return formatDayLabel(minDays);
+  }
+
+  if (maxDays != null) {
+    return formatDayLabel(maxDays);
+  }
+
+  return null;
+}
+
 export default async function Home() {
   const { season, products } = await getProductsForCurrentSeason();
 
@@ -84,6 +125,31 @@ export default async function Home() {
 
               const price = product.price_with_markup ?? product.avasam?.Price;
 
+              const shipping = product.shipping ?? null;
+              const shippingCost =
+                shipping?.shipping_cost_inc_vat ?? shipping?.shipping_cost ?? null;
+              const shippingCostLabel =
+                shippingCost != null && Math.abs(shippingCost) > 0
+                  ? `${formatCurrency(shippingCost, shipping?.currency)} delivery`
+                  : shipping
+                    ? "Free UK delivery"
+                    : "Shipping updating";
+
+              const dispatchLabel =
+                shipping?.dispatch_days != null
+                  ? `Dispatch ${formatDayLabel(shipping.dispatch_days)}`
+                  : null;
+              const deliveryWindow = formatDeliveryWindow(
+                shipping?.delivery_min_days,
+                shipping?.delivery_max_days,
+              );
+              const deliveryLabel =
+                deliveryWindow != null ? `Arrives in ${deliveryWindow}` : null;
+
+              const shippingDetail = [dispatchLabel, deliveryLabel]
+                .filter(Boolean)
+                .join(" • ");
+
               return (
                 <Link
                   key={product.id}
@@ -116,6 +182,10 @@ export default async function Home() {
                             £{price.toFixed(2)}
                           </span>
                         )}
+                        <span className="text-xs text-slate-500">
+                          {shippingCostLabel}
+                          {shippingDetail ? ` · ${shippingDetail}` : ""}
+                        </span>
                       </div>
                       <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-medium text-white">
                         View details

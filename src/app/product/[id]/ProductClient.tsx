@@ -15,6 +15,47 @@ type DisplayPrice =
 
 const MARKUP_PERCENT = Number(process.env.NEXT_PUBLIC_PRICE_MARKUP_PERCENT ?? 20);
 
+function formatCurrency(amount: number, currency?: string | null): string {
+  const normalizedCurrency = currency?.toUpperCase() ?? "GBP";
+
+  try {
+    return new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency: normalizedCurrency,
+      minimumFractionDigits: 2,
+    }).format(amount);
+  } catch (error) {
+    console.warn("Unable to format currency", normalizedCurrency, error);
+    return `£${amount.toFixed(2)}`;
+  }
+}
+
+function formatDayLabel(days: number): string {
+  return days === 1 ? "1 day" : `${days} days`;
+}
+
+function formatDeliveryWindow(
+  minDays: number | null | undefined,
+  maxDays: number | null | undefined,
+): string | null {
+  if (minDays != null && maxDays != null) {
+    if (minDays === maxDays) {
+      return formatDayLabel(minDays);
+    }
+    return `${formatDayLabel(minDays)} – ${formatDayLabel(maxDays)}`;
+  }
+
+  if (minDays != null) {
+    return formatDayLabel(minDays);
+  }
+
+  if (maxDays != null) {
+    return formatDayLabel(maxDays);
+  }
+
+  return null;
+}
+
 function computeVariantPriceWithMarkup(parent: AvasamProduct | null, variant: any | null) {
   if (!parent || !variant) return null;
 
@@ -33,6 +74,7 @@ const SUPPLIER_COPY_REGEX = /Imported from Avasam inventory/gi;
 
 export function ProductClient({ product }: { product: SeasonalProduct }) {
   const avasam = product.avasam ?? null;
+  const shipping = product.shipping ?? null;
   const variants = useMemo(() => (avasam?.Variations as any[]) ?? [], [avasam]);
 
   const variantColourMap = useMemo(() => {
@@ -144,6 +186,48 @@ export function ProductClient({ product }: { product: SeasonalProduct }) {
           : avasam?.Title ?? "";
     return candidate.replace(/\s*\.\.\.$/, "").trim();
   }, [avasam?.MultiTitle?.en, avasam?.Title, product.name]);
+
+  const shippingDisplay = useMemo(() => {
+    if (!shipping) {
+      return {
+        headline: "Shipping rates updating",
+        detail: "We\u2019re fetching the latest delivery estimate.",
+      };
+    }
+
+    const cost =
+      shipping.shipping_cost_inc_vat ?? shipping.shipping_cost ?? undefined;
+    const costLabel =
+      cost != null && Math.abs(cost) > 0
+        ? `${formatCurrency(cost, shipping.currency)} delivery`
+        : "Free UK delivery";
+
+    const dispatchLabel =
+      shipping.dispatch_days != null
+        ? `Dispatches in ${formatDayLabel(shipping.dispatch_days)}`
+        : null;
+
+    const deliveryWindow = formatDeliveryWindow(
+      shipping.delivery_min_days,
+      shipping.delivery_max_days,
+    );
+    const deliveryLabel =
+      deliveryWindow != null ? `Arrives in ${deliveryWindow}` : null;
+
+    const serviceLabel = shipping.service_name ?? shipping.warehouse_name ?? null;
+
+    const detailParts = [serviceLabel, dispatchLabel, deliveryLabel].filter(
+      Boolean,
+    ) as string[];
+
+    return {
+      headline: costLabel,
+      detail:
+        detailParts.length > 0
+          ? detailParts.join(" • ")
+          : "Delivery speed confirmed at checkout.",
+    };
+  }, [shipping]);
 
   const variantsWithMeta = useMemo(() => {
     return variants
@@ -378,7 +462,11 @@ export function ProductClient({ product }: { product: SeasonalProduct }) {
           )}
         </div>
 
-        <div className="rounded-2xl border border-slate-200/60 bg-slate-50 p-4 text-sm text-slate-600">
+        <div className="rounded-2xl border border-slate-200/60 bg-slate-50 p-4 text-sm text-slate-700">
+          <p className="font-semibold text-slate-900">{shippingDisplay.headline}</p>
+          <p className="mt-1 text-sm text-slate-600">{shippingDisplay.detail}</p>
+        </div>
+        <div className="rounded-2xl border border-slate-200/60 bg-slate-50 p-4 text-sm text-slate-700">
           Free UK delivery over £35 · Easy seasonal returns within 30 days
         </div>
       </div>

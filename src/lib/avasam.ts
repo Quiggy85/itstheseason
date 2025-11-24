@@ -33,6 +33,20 @@ export type AvasamProduct = {
   VariationType?: string;
 };
 
+export type AvasamShippingOption = {
+  warehouseId?: number;
+  warehouseName?: string;
+  serviceId?: number;
+  serviceName?: string;
+  shippingCost?: number;
+  shippingCostIncVat?: number;
+  currency?: string;
+  dispatchDays?: number;
+  deliveryMinDays?: number;
+  deliveryMaxDays?: number;
+  raw: Record<string, unknown>;
+};
+
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
 async function getAuthKey(): Promise<string> {
@@ -144,4 +158,157 @@ export async function getProductsBySkus(
   const skuSet = new Set(skus);
 
   return (data as AvasamProduct[]).filter((p) => skuSet.has(p.SKU));
+}
+
+function normalizeShippingOption(raw: any): AvasamShippingOption {
+  if (!raw || typeof raw !== "object") {
+    return { raw: {} };
+  }
+
+  const shippingCostIncVatCandidate =
+    typeof raw.ShippingCostIncVat === "number"
+      ? raw.ShippingCostIncVat
+      : typeof raw.TotalShippingPriceIncVat === "number"
+        ? raw.TotalShippingPriceIncVat
+        : typeof raw.PriceIncVat === "number"
+          ? raw.PriceIncVat
+          : undefined;
+
+  const shippingCostCandidate =
+    typeof raw.ShippingCost === "number"
+      ? raw.ShippingCost
+      : typeof raw.TotalShippingPrice === "number"
+        ? raw.TotalShippingPrice
+        : typeof raw.Price === "number"
+          ? raw.Price
+          : undefined;
+
+  const deliveryMinDaysCandidate =
+    typeof raw.DeliveryMinDays === "number"
+      ? raw.DeliveryMinDays
+      : typeof raw.EstimatedDeliveryMin === "number"
+        ? raw.EstimatedDeliveryMin
+        : typeof raw.MinDeliveryDays === "number"
+          ? raw.MinDeliveryDays
+          : undefined;
+
+  const deliveryMaxDaysCandidate =
+    typeof raw.DeliveryMaxDays === "number"
+      ? raw.DeliveryMaxDays
+      : typeof raw.EstimatedDeliveryMax === "number"
+        ? raw.EstimatedDeliveryMax
+        : typeof raw.MaxDeliveryDays === "number"
+          ? raw.MaxDeliveryDays
+          : undefined;
+
+  const dispatchDaysCandidate =
+    typeof raw.DispatchTime === "number"
+      ? raw.DispatchTime
+      : typeof raw.DispatchDays === "number"
+        ? raw.DispatchDays
+        : typeof raw.LeadTime === "number"
+          ? raw.LeadTime
+          : undefined;
+
+  return {
+    warehouseId:
+      typeof raw.WarehouseId === "number"
+        ? raw.WarehouseId
+        : typeof raw.WarehouseID === "number"
+          ? raw.WarehouseID
+          : undefined,
+    warehouseName:
+      typeof raw.WarehouseName === "string"
+        ? raw.WarehouseName
+        : typeof raw.Warehouse === "string"
+          ? raw.Warehouse
+          : undefined,
+    serviceId:
+      typeof raw.ShippingServiceId === "number"
+        ? raw.ShippingServiceId
+        : typeof raw.ShippingServiceID === "number"
+          ? raw.ShippingServiceID
+          : undefined,
+    serviceName:
+      typeof raw.ShippingServiceName === "string"
+        ? raw.ShippingServiceName
+        : typeof raw.ServiceName === "string"
+          ? raw.ServiceName
+          : typeof raw.Service === "string"
+            ? raw.Service
+            : undefined,
+    shippingCost: shippingCostCandidate,
+    shippingCostIncVat: shippingCostIncVatCandidate,
+    currency:
+      typeof raw.Currency === "string"
+        ? raw.Currency
+        : typeof raw.CurrencyCode === "string"
+          ? raw.CurrencyCode
+          : undefined,
+    dispatchDays: dispatchDaysCandidate,
+    deliveryMinDays: deliveryMinDaysCandidate,
+    deliveryMaxDays: deliveryMaxDaysCandidate,
+    raw,
+  };
+}
+
+export async function getShippingOptionsBySku(
+  sku: string,
+): Promise<AvasamShippingOption[]> {
+  if (!sku) return [];
+
+  const authKey = await getAuthKey();
+
+  const res = await fetch(`${AVASAM_BASE_URL}/Products/GetProductWarehouseDetail`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: authKey,
+    },
+    body: JSON.stringify({ SKU: sku }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "<no body>");
+    console.error("Avasam GetProductWarehouseDetail error", sku, res.status, body);
+    return [];
+  }
+
+  const data = await res.json().catch(() => null);
+
+  if (!data) {
+    return [];
+  }
+
+  const candidateLists = [
+    Array.isArray(data) ? data : null,
+    Array.isArray(data?.WarehouseDetails) ? data.WarehouseDetails : null,
+    Array.isArray(data?.Warehouses) ? data.Warehouses : null,
+    Array.isArray(data?.ShippingOptions) ? data.ShippingOptions : null,
+  ].filter(Boolean) as any[];
+
+  const flattened = candidateLists.length > 0 ? candidateLists[0] : [];
+
+  if (!Array.isArray(flattened)) {
+    return [];
+  }
+
+  const detailedOptions: any[] = [];
+
+  flattened.forEach((entry) => {
+    if (!entry) return;
+    if (Array.isArray(entry.ShippingServices)) {
+      entry.ShippingServices.forEach((service: any) => {
+        detailedOptions.push({ ...service, WarehouseId: entry.WarehouseId ?? entry.WarehouseID, WarehouseName: entry.WarehouseName ?? entry.Warehouse });
+      });
+    } else {
+      detailedOptions.push(entry);
+    }
+  });
+
+  if (detailedOptions.length === 0) {
+    return flattened.map((raw) => normalizeShippingOption(raw));
+  }
+
+  return detailedOptions.map((raw) => normalizeShippingOption(raw));
 }
