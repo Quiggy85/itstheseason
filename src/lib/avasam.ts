@@ -270,6 +270,16 @@ export async function getShippingOptionsBySku(
 
   if (!res.ok) {
     const body = await res.text().catch(() => "<no body>");
+
+    if (res.status === 404) {
+      console.warn(
+        "Avasam GetProductWarehouseDetail missing shipping",
+        sku,
+        body,
+      );
+      return [];
+    }
+
     console.error("Avasam GetProductWarehouseDetail error", sku, res.status, body);
     return [];
   }
