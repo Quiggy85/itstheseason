@@ -259,42 +259,82 @@ export async function getShippingOptionsBySku(
 
   const authKey = await getAuthKey();
 
-  const res = await fetch(`${AVASAM_BASE_URL}/Products/GetProductWarehouseDetail`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: authKey,
-    },
-    body: JSON.stringify({ SKU: sku }),
-  });
+  const endpointPaths = [
+    "/ProductModule/GetProductWarehouseDetail",
+    "/Products/GetProductWarehouseDetail",
+  ];
 
-  if (!res.ok) {
-    const body = await res.text().catch(() => "<no body>");
+  let data: unknown = null;
+  let lastStatus: number | null = null;
+  let lastBody: string | null = null;
 
-    if (res.status === 404) {
-      console.warn(
-        "Avasam GetProductWarehouseDetail missing shipping",
+  for (const path of endpointPaths) {
+    const res = await fetch(`${AVASAM_BASE_URL}${path}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: authKey,
+      },
+      body: JSON.stringify({ SKU: sku }),
+    });
+
+    lastStatus = res.status;
+
+    if (!res.ok) {
+      lastBody = await res.text().catch(() => "<no body>");
+
+      if (res.status === 404) {
+        console.warn(
+          "Avasam GetProductWarehouseDetail missing shipping",
+          sku,
+          path,
+          lastBody,
+        );
+        continue;
+      }
+
+      console.error(
+        "Avasam GetProductWarehouseDetail error",
         sku,
-        body,
+        path,
+        res.status,
+        lastBody,
       );
-      return [];
+      continue;
     }
 
-    console.error("Avasam GetProductWarehouseDetail error", sku, res.status, body);
-    return [];
-  }
+    data = await res.json().catch(() => null);
 
-  const data = await res.json().catch(() => null);
+    if (data) {
+      if (path !== endpointPaths[0]) {
+        console.warn(
+          "Avasam shipping fallback in use",
+          sku,
+          { attempted: endpointPaths[0], used: path },
+        );
+      }
+      break;
+    }
+  }
 
   if (!data) {
+    if (lastStatus) {
+      console.warn(
+        "Avasam shipping request returned empty payload",
+        sku,
+        { status: lastStatus, body: lastBody },
+      );
+    }
     return [];
   }
 
+  const dataAny = data as any;
+
   const candidateLists = [
-    Array.isArray(data) ? data : null,
-    Array.isArray(data?.WarehouseDetails) ? data.WarehouseDetails : null,
-    Array.isArray(data?.Warehouses) ? data.Warehouses : null,
-    Array.isArray(data?.ShippingOptions) ? data.ShippingOptions : null,
+    Array.isArray(dataAny) ? dataAny : null,
+    Array.isArray(dataAny?.WarehouseDetails) ? dataAny.WarehouseDetails : null,
+    Array.isArray(dataAny?.Warehouses) ? dataAny.Warehouses : null,
+    Array.isArray(dataAny?.ShippingOptions) ? dataAny.ShippingOptions : null,
   ].filter(Boolean) as any[];
 
   const flattened = candidateLists.length > 0 ? candidateLists[0] : [];
